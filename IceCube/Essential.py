@@ -225,12 +225,15 @@ def get_reco_angles(batches):
 
 
 def prepare_batch(df, sensor):
-    df["event_id"] = df.index.astype(np.int64)
-    
+    df["event_id"] = df.index.astype(np.int64)    
     df = df.reset_index(drop=True)
+
+    # remove auxiliary
+    df = df[~df.auxiliary]
+
     df.charge = df.charge.astype(np.float32)
     df.charge = np.clip(df.charge, 0, 4)
-    times = df[~df.auxiliary].groupby("event_id").agg(
+    times = df.groupby("event_id").agg(
         t_min = ("time", np.min),
     )
     
@@ -268,15 +271,14 @@ def solve_linear(xw, yw, zw, xxw, yyw, zzw, xyw, yzw, zxw):
         return torch.zeros((3, ))
 
 
-def plane_fit(df, c, a, x, y, z, k=0, kt=0, kq=0, kaux=1, fun=None, eps=1e-8):
+def plane_fit(df, c, a, x, y, z, k=0, kt=0, kq=0, fun=None, eps=1e-8):
     z_avg = series2tensor(df.z_avg)
     t = series2tensor(df.time)
 
     # weighted by ...
-    w = torch.pow(c, kq) \
-        * torch.exp(-k * torch.square(z - z_avg)) \
+    w = torch.exp(-k * torch.square(z - z_avg)) \
         * torch.exp(-kt * t) \
-        * (1 - kaux * a)
+        * torch.pow(c, kq)
 
     # w = w.to(DEVICE)
     # x = x.to(DEVICE)
@@ -291,7 +293,7 @@ def plane_fit(df, c, a, x, y, z, k=0, kt=0, kq=0, kaux=1, fun=None, eps=1e-8):
     xw = torch.sum(xw); xxw = torch.sum(xxw); xyw = torch.sum(xyw) 
     yw = torch.sum(yw); yyw = torch.sum(yyw); yzw = torch.sum(yzw) 
     zw = torch.sum(zw); zzw = torch.sum(zzw); zxw = torch.sum(zxw) 
-    sumw = torch.sum(w)
+    sumw = torch.sum(w); sumc = torch.sum(c); dt = torch.max(t)
 
     sumw += eps
     xw /= sumw; xxw /= sumw; xyw /= sumw
@@ -301,21 +303,23 @@ def plane_fit(df, c, a, x, y, z, k=0, kt=0, kq=0, kaux=1, fun=None, eps=1e-8):
     coeff = solve_linear(xw, yw, zw, xxw, yyw, zzw, xyw, yzw, zxw)
     error = torch.sum(w * (z - coeff[0] * x - coeff[1] * y - coeff[2])) / torch.sum(w)
     error *= 1e9
-    good_hits = (w.shape[0] - w[a > 0.9].shape[0]) / w.shape[0]
     hits = w.shape[0]
 
-    ret = torch.tensor([[coeff[0], coeff[1], -1, torch.square(error), good_hits, hits]])
+    ret = torch.tensor([[coeff[0], coeff[1], -1, torch.square(error), hits, sumw, sumc, dt]])
     ret[:, :3] /= torch.sqrt(coeff[0]**2 + coeff[1]**2 + 1)
 
     return ret
 
 
 def prepare_df_for_plane(df):
-
     df = df.reset_index(drop=True)
+
+    # remove auxiliary
+    df = df[~df.auxiliary]
+
     df.charge = df.charge.astype(np.float32)
     df.charge = np.clip(df.charge, 0, 4)
-    t_min = np.min(df = df[~df.auxiliary].time)
+    t_min = np.min(df.time)
     df.time = ((df.time - t_min) * 0.299792458e-3).astype(np.float32)
     df.x *= 1e-3; df.y *= 1e-3; df.z *= 1e-3
     
@@ -327,7 +331,6 @@ def prepare_df_for_plane(df):
 
     centre["z_avg"] = centre.qzsum / centre.qsum
     df = pd.merge(df, centre[["z_avg"]], on=["x", "y"])
-    df = df.sort_values(["time"])
 
     return df[["z_avg", "time"]]
 
@@ -402,7 +405,7 @@ class IceCube(IterableDataset):
                             df_fail = df_fail.sample(self.max_pulses - len(df_pass))
                             df = pd.concat([df_fail, df_pass])
 
-                    df = df.sort_values(["time"])
+                    df.sort_values(["time"], inplace=True)
 
                     t = series2tensor(df.time)
                     c = series2tensor(df.charge)

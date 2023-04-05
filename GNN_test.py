@@ -33,7 +33,8 @@ def produce_prediction(model, parquet_dir, meta_dir, batch_num=1):
             pred = angles if pred is None else np.concatenate([pred, angles]) 
     
     res = pd.DataFrame(pred, 
-        columns=["x", "y", "z", "azimuth", "zenith", "ex", "ey", "ez", "fit_error", "good_hits"])
+        columns=["x", "y", "z", "azimuth", "zenith",
+                 "ex", "ey", "ez", "fit_error", "hits", "sumw", "sumc", "dt"])
     res.to_parquet(output_file)
     print(res)
 

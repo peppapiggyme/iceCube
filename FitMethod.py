@@ -1,12 +1,11 @@
 
 from IceCube.Essential import *
 from IceCube.Model import *
-from scipy.optimize import differential_evolution, direct, Bounds
-import pdb
+from scipy.optimize import differential_evolution, minimize, Bounds
+import pdb, yaml
 
 
 def svd_agg(x):
-    x.sort_values(["time"])
     w = x[["w"]].values
     x = x[["x", "y", "z"]].values
     x = x * w
@@ -51,12 +50,11 @@ def solve_linear(point):
         return np.zeros((1, 3))
 
 
-def plane_fit(df, k=0, kt=0, kq=0, kaux=1, eps=1e-8):
+def plane_fit(df, k=0, kt=0, kq=0, eps=1e-8):
     # weighted by ...
-    df["w"] = np.power(df.charge, kq) \
-        * np.exp(-k * np.square(df.z - df.z_avg)) \
+    df["w"] = np.exp(-k * np.square(df.z - df.z_avg)) \
         * np.exp(-kt * df.time) \
-        * (1 - kaux * df.auxiliary)
+        * np.power(df.charge, kq)
 
     # weighted values
     df["xw"] = df.x * df.w; df["xxw"] = df.x * df.x * df.w; df["xyw"] = df.x * df.y * df.w
@@ -70,7 +68,7 @@ def plane_fit(df, k=0, kt=0, kq=0, kaux=1, eps=1e-8):
         sumw = ("w", np.sum)
     ).reset_index()
 
-    svd = df.groupby("event_id").apply(svd_agg)
+    # svd = df.groupby("event_id").apply(svd_agg)
 
     wtd.sumw += eps
     wtd.xw /= wtd.sumw; wtd.xxw /= wtd.sumw; wtd.xyw /= wtd.sumw
@@ -82,11 +80,11 @@ def plane_fit(df, k=0, kt=0, kq=0, kaux=1, eps=1e-8):
         coeff = solve_linear(row)
         res = coeff if res is None else np.concatenate((res, coeff)) 
 
-    return res, svd
+    return res
 
 
 def func(x):
-    coeff, svd = plane_fit(pulses_df, x[0], x[1], x[2], x[3])
+    coeff = plane_fit(pulses_df, x[0], x[1], x[2])
     LOGGER.debug(f"coeff\n{coeff}")
     norm = np.sqrt(coeff[:, 0]**2 + coeff[:, 1]**2 + 1)[:, np.newaxis]
     unit_vec = np.array([coeff[:, 0], coeff[:, 1], -1*np.ones(coeff[:, 1].shape)]).T
@@ -94,17 +92,16 @@ def func(x):
     # Rot = np.linalg.multi_dot([Rz(x[4]), Ry(x[3]), Rx(x[2])])
     # unit_vec = np.einsum("mk,bm->bk", Rot, unit_vec)
     prod = np.abs(np.sum(unit_vec * n, axis=1)).mean()
-    # LOGGER.info(f"prod = {prod}, k = {x[0]:.4f}, kq = {x[1]:.4f}, x,y,z={x[2:5]}")
-    LOGGER.info(f"prod = {prod}, k = {x[0]:.6f}, kt = {x[1]:.6f}, kq = {x[2]:.6f}, kaux = {x[3]:.6f}")
+    LOGGER.info(f"prod = {prod}, k = {x[0]:.6f}, kt = {x[1]:.6f}, kq = {x[2]:.6f}")
 
-    err, az, ze = angle_errors(svd.values, n)
-    LOGGER.info(f"svd result err = {err.mean()}")
+    # err, az, ze = angle_errors(svd.values, n)
+    # LOGGER.info(f"svd result err = {err.mean()}")
 
-    xe = np.sum(svd.values * unit_vec, axis=1)
-    proj = svd - xe[:, np.newaxis] * unit_vec
-    proj /= (np.linalg.norm(proj, axis=1, keepdims=True) + 1e-8)
-    err, az, ze = angle_errors(proj.values, n)
-    LOGGER.info(f"svd proj result err = {err.mean()}")
+    # xe = np.sum(svd.values * unit_vec, axis=1)
+    # proj = svd - xe[:, np.newaxis] * unit_vec
+    # proj /= (np.linalg.norm(proj, axis=1, keepdims=True) + 1e-8)
+    # err, az, ze = angle_errors(proj.values, n)
+    # LOGGER.info(f"svd proj result err = {err.mean()}")
 
     return prod
 
@@ -112,9 +109,8 @@ def func(x):
 def save_parameters(res, file_path):
     param = {
         "k"       : float(res.x[0]),
-        "kq"      : float(res.x[1]),
-        "kt"      : float(res.x[2]),
-        "kaux"    : float(res.x[3]),
+        "kt"      : float(res.x[1]),
+        "kq"      : float(res.x[2]),
         "fun"     : float(res.fun),
     }
 
@@ -146,17 +142,23 @@ if __name__ == "__main__":
     n = true_df[["nx","ny","nz"]].to_numpy()
 
     """ Step 1: find global minimum (roughly) """
-    # bounds = [(3, 10), (3, 10), (3, 10), (0.995, 0.999999)]
-    # res = differential_evolution(func, bounds, maxiter=10, popsize=12)
-    # LOGGER.info(res.x)
-    # LOGGER.info(res.fun)
-    # save_parameters(res, "../logs/parameters.yaml")
+    # +-------+------+--------+-------+
+    # | Bound |  k   |   kt   |   kq  |
+    # +-------+------+--------+-------+
+    bounds = [(0, 10), (0, 10), (0, 5)]
+    # +-------+------+--------+-------+
+    res = differential_evolution(func, bounds, maxiter=20, popsize=12)
+    LOGGER.info(res.x)
+    LOGGER.info(res.fun)
+    save_parameters(res, "../logs/parameters.yaml")
     
     """ Step 2: find global minimum (roughly) """
-    # x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kq'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kaux']]
+    # x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kq']]
     # res = minimize(func, x0, method="Nelder-Mead", tol=1e-6)
     # save_parameters(res, "../logs/parameters_local.yaml")    
     
     """ Test the best-fit parameters """
-    x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kq'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kaux']]
-    func(x0)
+    # x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kq']]
+    # x0 = [1, 1, 1]
+    # func(x0)
+
