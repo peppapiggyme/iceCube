@@ -1,8 +1,8 @@
 
 from IceCube.Essential import *
 from IceCube.Model import *
-from scipy.optimize import differential_evolution, direct, Bounds
-import pdb
+from scipy.optimize import differential_evolution, minimize, Bounds
+import pdb, yaml
 
 
 def svd_agg(x):
@@ -86,7 +86,7 @@ def plane_fit(df, k=0, kt=0, kq=0, kaux=1, eps=1e-8):
 
 def func(x):
     coeff = plane_fit(pulses_df, x[0], x[1], x[2], x[3])
-    print(coeff)
+    LOGGER.debug(f"coeff\n{coeff}")
     norm = np.sqrt(coeff[:, 0]**2 + coeff[:, 1]**2 + 1)[:, np.newaxis]
     unit_vec = np.array([coeff[:, 0], coeff[:, 1], -1*np.ones(coeff[:, 1].shape)]).T
     unit_vec /= norm
@@ -94,7 +94,7 @@ def func(x):
     # unit_vec = np.einsum("mk,bm->bk", Rot, unit_vec)
     prod = np.abs(np.sum(unit_vec * n, axis=1)).mean()
     # LOGGER.info(f"prod = {prod}, k = {x[0]:.4f}, kq = {x[1]:.4f}, x,y,z={x[2:5]}")
-    LOGGER.info(f"prod = {prod}, k = {x[0]:.4f}, kt = {x[1]:.4f}, kq = {x[2]:.4f}, kaux = {x[3]:.4f}")
+    LOGGER.info(f"prod = {prod}, k = {x[0]:.6f}, kt = {x[1]:.6f}, kq = {x[2]:.6f}, kaux = {x[3]:.6f}")
 
     # pdb.set_trace()
     
@@ -110,6 +110,21 @@ def func(x):
     # pdb.set_trace()
 
     return prod
+
+
+def save_parameters(res, file_path):
+    param = {
+        "k"       : float(res.x[0]),
+        "kq"      : float(res.x[1]),
+        "kt"      : float(res.x[2]),
+        "kaux"    : float(res.x[3]),
+        "fun"     : float(res.fun),
+    }
+
+    with open(file_path, "w") as f:
+        yaml.dump(param, f)
+
+    print(f"ciao, saved to {file_path}")
 
 
 if __name__ == "__main__":
@@ -133,29 +148,19 @@ if __name__ == "__main__":
     print(true_df.head(2))
     n = true_df[["nx","ny","nz"]].to_numpy()
 
-    x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kq'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kaux']]
-    func(x0)
-
-    pdb.set_trace()
-
+    """ Step 1: find global minimum (roughly) """
     # bounds = [(3, 10), (3, 10), (3, 10), (0.995, 0.999999)]
     # res = differential_evolution(func, bounds, maxiter=10, popsize=12)
     # LOGGER.info(res.x)
     # LOGGER.info(res.fun)
+    # save_parameters(res, "../logs/parameters.yaml")
     
-    # param = {
-    #     "k"       : float(res.x[0]),
-    #     "kq"      : float(res.x[1]),
-    #     "kt"      : float(res.x[2]),
-    #     "kaux"    : float(res.x[3]),
-    #     "fun"     : float(res.fun),
-    # }
-
-    # pdb.set_trace()
+    """ Step 2: find global minimum (roughly) """
+    x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kq'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kaux']]
+    res = minimize(func, x0, method="Nelder-Mead", tol=1e-6)
+    save_parameters(res, "../logs/parameters_local.yaml")    
     
-    # import yaml
-
-    # with open("../logs/parameters.yaml", "w") as f:
-    #     yaml.dump(param, f)
-
-    print('ciao')
+    """ Test the best-fit parameters """
+    # x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kq'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kaux']]
+    # func(x0)
+    
