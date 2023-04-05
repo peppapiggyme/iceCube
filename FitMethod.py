@@ -6,6 +6,7 @@ import pdb, yaml
 
 
 def svd_agg(x):
+    x.sort_values(["time"])
     w = x[["w"]].values
     x = x[["x", "y", "z"]].values
     x = x * w
@@ -54,7 +55,7 @@ def plane_fit(df, k=0, kt=0, kq=0, kaux=1, eps=1e-8):
     # weighted by ...
     df["w"] = np.power(df.charge, kq) \
         * np.exp(-k * np.square(df.z - df.z_avg)) \
-        * np.exp(-kt * np.square(df.time)) \
+        * np.exp(-kt * df.time) \
         * (1 - kaux * df.auxiliary)
 
     # weighted values
@@ -69,7 +70,7 @@ def plane_fit(df, k=0, kt=0, kq=0, kaux=1, eps=1e-8):
         sumw = ("w", np.sum)
     ).reset_index()
 
-    # svd = df.groupby("event_id").apply(svd_agg)
+    svd = df.groupby("event_id").apply(svd_agg)
 
     wtd.sumw += eps
     wtd.xw /= wtd.sumw; wtd.xxw /= wtd.sumw; wtd.xyw /= wtd.sumw
@@ -81,11 +82,11 @@ def plane_fit(df, k=0, kt=0, kq=0, kaux=1, eps=1e-8):
         coeff = solve_linear(row)
         res = coeff if res is None else np.concatenate((res, coeff)) 
 
-    return res
+    return res, svd
 
 
 def func(x):
-    coeff = plane_fit(pulses_df, x[0], x[1], x[2], x[3])
+    coeff, svd = plane_fit(pulses_df, x[0], x[1], x[2], x[3])
     LOGGER.debug(f"coeff\n{coeff}")
     norm = np.sqrt(coeff[:, 0]**2 + coeff[:, 1]**2 + 1)[:, np.newaxis]
     unit_vec = np.array([coeff[:, 0], coeff[:, 1], -1*np.ones(coeff[:, 1].shape)]).T
@@ -96,18 +97,14 @@ def func(x):
     # LOGGER.info(f"prod = {prod}, k = {x[0]:.4f}, kq = {x[1]:.4f}, x,y,z={x[2:5]}")
     LOGGER.info(f"prod = {prod}, k = {x[0]:.6f}, kt = {x[1]:.6f}, kq = {x[2]:.6f}, kaux = {x[3]:.6f}")
 
-    # pdb.set_trace()
-    
-    # err, az, ze = angle_errors(svd.values, n)
-    # LOGGER.info(f"svd result err = {err.mean()}")
+    err, az, ze = angle_errors(svd.values, n)
+    LOGGER.info(f"svd result err = {err.mean()}")
 
-    # xe = np.sum(svd.values * unit_vec, axis=1)
-    # proj = svd - xe[:, np.newaxis] * unit_vec
-    # proj /= (np.linalg.norm(proj, axis=1, keepdims=True) + 1e-8)
-    # err, az, ze = angle_errors(proj.values, n)
-    # LOGGER.info(f"svd proj result err = {err.mean()}")
-
-    # pdb.set_trace()
+    xe = np.sum(svd.values * unit_vec, axis=1)
+    proj = svd - xe[:, np.newaxis] * unit_vec
+    proj /= (np.linalg.norm(proj, axis=1, keepdims=True) + 1e-8)
+    err, az, ze = angle_errors(proj.values, n)
+    LOGGER.info(f"svd proj result err = {err.mean()}")
 
     return prod
 
@@ -135,7 +132,7 @@ if __name__ == "__main__":
     sensor = prepare_sensors(1e-3)
     print(sensor.head(2))
 
-    pulses_df = None              
+    pulses_df = None
     for i in BATCHES_FIT:
         df = pd.read_parquet(os.path.join(parquet_dir, f"batch_{i}.parquet"))     
         df = prepare_batch(df, sensor)
@@ -156,11 +153,11 @@ if __name__ == "__main__":
     # save_parameters(res, "../logs/parameters.yaml")
     
     """ Step 2: find global minimum (roughly) """
-    x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kq'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kaux']]
-    res = minimize(func, x0, method="Nelder-Mead", tol=1e-6)
-    save_parameters(res, "../logs/parameters_local.yaml")    
+    # x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kq'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kaux']]
+    # res = minimize(func, x0, method="Nelder-Mead", tol=1e-6)
+    # save_parameters(res, "../logs/parameters_local.yaml")    
     
     """ Test the best-fit parameters """
-    # x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kq'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kaux']]
-    # func(x0)
-    
+    x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kq'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kaux']]
+    func(x0)
+

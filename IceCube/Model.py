@@ -19,10 +19,10 @@ class Model(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()
-        self.conv0 = EdgeConv(MLP([17 * 2, 128, 256]), aggr='add')
-        self.conv1 = EdgeConv(MLP([512, 336, 256]), aggr='add')
-        self.conv2 = EdgeConv(MLP([512, 336, 256]), aggr='add')
-        self.conv3 = EdgeConv(MLP([512, 336, 256]), aggr='add')
+        self.conv0 = EdgeConv(MLP([17 * 2, 128, 256]), aggr="add")
+        self.conv1 = EdgeConv(MLP([512, 336, 256]), aggr="add")
+        self.conv2 = EdgeConv(MLP([512, 336, 256]), aggr="add")
+        self.conv3 = EdgeConv(MLP([512, 336, 256]), aggr="add")
         self.post = MLP([1024 + 17, 336, 256])
         self.readout = MLP([768, 128])
         self.pred = nn.Linear(128, 3)
@@ -103,17 +103,17 @@ class Model(pl.LightningModule):
         true_xyz = data.gt.view(-1, 3)  # [B, 3]
         loss = VonMisesFisher3DLoss()(pred_xyzk, true_xyz).mean()
         error = angular_error(pred_xyzk[:, :3], true_xyz).mean()
-        self.log(f'loss-{prefix}', loss, batch_size=len(true_xyz), 
+        self.log(f"loss-{prefix}", loss, batch_size=len(true_xyz), 
             on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.log(f'error-{prefix}', error, batch_size=len(true_xyz), 
+        self.log(f"error-{prefix}", error, batch_size=len(true_xyz), 
             on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         return loss
 
     def training_step(self, data, _):
-        return self.train_or_valid_step(data, 'train')
+        return self.train_or_valid_step(data, "train")
 
     def validation_step(self, data, _):
-        return self.train_or_valid_step(data, 'valid')
+        return self.train_or_valid_step(data, "valid")
     
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.max_lr)
@@ -130,10 +130,10 @@ class Model(pl.LightningModule):
             milestones=[self.hparams.num_warmup_step],
         )
         return {
-            'optimizer': optimizer,
-            'lr_scheduler': {
-                'scheduler': scheduler,
-                'interval': 'step',
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
             },
         }
 

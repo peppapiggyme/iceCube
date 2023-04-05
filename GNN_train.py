@@ -4,7 +4,7 @@ from IceCube.Model import *
 import pdb
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Config
     step_per_epoch = int(len(BATCHES_TRAIN) * EVENTS_PER_FILE / BATCH_SIZE)
     num_total_step = EPOCHS * step_per_epoch
@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parquet_dir = os.path.join(PATH, "train")
     meta_dir = os.path.join(PATH, "train_meta")
     
-    log_dir = '/root/autodl-tmp/logs/'
+    log_dir = "/root/autodl-tmp/logs/"
 
     train_set = IceCube(
         parquet_dir, meta_dir, BATCHES_TRAIN, batch_size=BATCH_SIZE, shuffle=True
@@ -46,7 +46,7 @@ if __name__ == '__main__':
     trainer = pl.Trainer(
         default_root_dir=log_dir,
         logger=pl.loggers.CSVLogger(log_dir), 
-        accelerator='gpu',
+        accelerator="gpu",
         devices=2,
         max_steps=num_total_step,
         log_every_n_steps=100 * EVENTS_PER_FILE / BATCH_SIZE, # 100 files
@@ -54,7 +54,7 @@ if __name__ == '__main__':
         gradient_clip_val=1.0,
         callbacks=[
             pl.callbacks.ModelSummary(),
-            pl.callbacks.LearningRateMonitor(logging_interval='step'),
+            pl.callbacks.LearningRateMonitor(logging_interval="step"),
             pl.callbacks.ModelCheckpoint(log_dir, save_top_k=-1),
         ],
     )
