@@ -52,7 +52,7 @@ BATCHES_TRAIN = list(range(101, 601))
 BATCHES_VALID = list(range(61, 80))
 # BATCHES_FIT = list(range(1, 51, 10))
 BATCHES_FIT = [1]
-BATCHES_TEST = [1]
+BATCHES_TEST = list(range(1, 21))
 
 # basic settings
 LOGGER = get_logger("GNN", "DEBUG")
@@ -169,8 +169,11 @@ def vector2angles(n, eps=1e-8):
     return azimuth, zenith
 
 
-def series2tensor(series):
-    return torch.from_numpy(series.values).float()
+def series2tensor(series, set_device=None):
+    ret = torch.from_numpy(series.values).float()
+    if set_device is not None:
+        return ret.to(DEVICE)
+    return ret
 
 
 def angle_errors(n1, n2, eps=1e-8):
@@ -271,19 +274,18 @@ def solve_linear(xw, yw, zw, xxw, yyw, zzw, xyw, yzw, zxw):
         return torch.zeros((3, ))
 
 
-def plane_fit(df, c, a, x, y, z, k=0, kt=0, kq=0, fun=None, eps=1e-8):
+def plane_fit(df, k=0, kt=0, kq=0, fun=None, eps=1e-8):
     z_avg = series2tensor(df.z_avg)
     t = series2tensor(df.time)
+    c = series2tensor(df.charge)
+    x = series2tensor(df.x)
+    y = series2tensor(df.y)
+    z = series2tensor(df.z)
 
     # weighted by ...
     w = torch.exp(-k * torch.square(z - z_avg)) \
         * torch.exp(-kt * t) \
         * torch.pow(c, kq)
-
-    # w = w.to(DEVICE)
-    # x = x.to(DEVICE)
-    # y = y.to(DEVICE)
-    # z = z.to(DEVICE)
 
     # weighted values
     xw = (x*w); xxw = (x*x*w); xyw = (x*y*w)
@@ -293,7 +295,7 @@ def plane_fit(df, c, a, x, y, z, k=0, kt=0, kq=0, fun=None, eps=1e-8):
     xw = torch.sum(xw); xxw = torch.sum(xxw); xyw = torch.sum(xyw) 
     yw = torch.sum(yw); yyw = torch.sum(yyw); yzw = torch.sum(yzw) 
     zw = torch.sum(zw); zzw = torch.sum(zzw); zxw = torch.sum(zxw) 
-    sumw = torch.sum(w); sumc = torch.sum(c); dt = torch.max(t)
+    sumw = torch.sum(w); sumc = torch.sum(w*c); dt = torch.median(t)
 
     sumw += eps
     xw /= sumw; xxw /= sumw; xyw /= sumw
@@ -301,11 +303,14 @@ def plane_fit(df, c, a, x, y, z, k=0, kt=0, kq=0, fun=None, eps=1e-8):
     zw /= sumw; zzw /= sumw; zxw /= sumw
 
     coeff = solve_linear(xw, yw, zw, xxw, yyw, zzw, xyw, yzw, zxw)
-    error = torch.sum(w * (z - coeff[0] * x - coeff[1] * y - coeff[2])) / torch.sum(w)
-    error *= 1e9
+    error = torch.sum((z - coeff[0] * x - coeff[1] * y - coeff[2]))
+    error *= 1e3
     hits = w.shape[0]
+    unique_x = torch.unique(x).shape[0]
+    unique_y = torch.unique(y).shape[0]
+    unique_z = torch.unique(z).shape[0]
 
-    ret = torch.tensor([[coeff[0], coeff[1], -1, torch.square(error), hits, sumw, sumc, dt]])
+    ret = torch.tensor([[coeff[0], coeff[1], -1, torch.square(error), hits, sumc, dt, unique_x, unique_y, unique_z]])
     ret[:, :3] /= torch.sqrt(coeff[0]**2 + coeff[1]**2 + 1)
 
     return ret
@@ -332,7 +337,7 @@ def prepare_df_for_plane(df):
     centre["z_avg"] = centre.qzsum / centre.qsum
     df = pd.merge(df, centre[["z_avg"]], on=["x", "y"])
 
-    return df[["z_avg", "time"]]
+    return df[["z_avg", "time", "charge", "x", "y", "z"]]
 
 
 # Dataset
@@ -420,8 +425,7 @@ class IceCube(IterableDataset):
                     )
 
                     if self.use_fit:
-                        coeff = plane_fit(prepare_df_for_plane(df), 
-                            c=c, a=a, x=x*1e-3, y=y*1e-3, z=z*1e-3, **BEST_FIT_VALUES)
+                        coeff = plane_fit(prepare_df_for_plane(df), **BEST_FIT_VALUES)
                         setattr(batch_data, "plane", coeff)
 
                     batch.append(batch_data)

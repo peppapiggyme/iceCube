@@ -10,7 +10,7 @@ def produce_prediction(model, parquet_dir, meta_dir, batch_num=1):
     output_file = os.path.join(PRED_PATH, output_name)
 
     test_set = IceCube(
-        parquet_dir, meta_dir, [batch_num], batch_size=200, use_fit=True
+        parquet_dir, meta_dir, [batch_num], batch_size=BATCH_SIZE, use_fit=True
     )
 
     test_loader = DataLoader(
@@ -34,7 +34,8 @@ def produce_prediction(model, parquet_dir, meta_dir, batch_num=1):
     
     res = pd.DataFrame(pred, 
         columns=["x", "y", "z", "azimuth", "zenith",
-                 "ex", "ey", "ez", "fit_error", "hits", "sumw", "sumc", "dt"])
+                 "ex", "ey", "ez", "fit_error", "hits", "sumc", "dt", 
+                 "unique_x", "unique_y", "unique_z"])
     res.to_parquet(output_file)
     print(res)
 
@@ -49,7 +50,7 @@ if __name__ == "__main__":
     format = ModelFormat.ckpt
 
     file_pth = "official-pretrained.pth"
-    file_ckpt = "pretrained-480000.ckpt"
+    file_ckpt = "pretrained-800000.ckpt"
 
     parquet_dir = os.path.join(PATH, "train")
     meta_dir = os.path.join(PATH, "train_meta")
@@ -58,8 +59,10 @@ if __name__ == "__main__":
         model = Model()
         weights = torch.load(os.path.join(MODEL_PATH, file_pth))
         model.load_state_dict(weights)
+        LOGGER.info(f"loaded {file_pth}")
     elif format == ModelFormat.ckpt:
         model = Model.load_from_checkpoint(os.path.join(MODEL_PATH, file_ckpt))
+        LOGGER.info(f"loaded {file_ckpt}")
 
     model.eval()
     model.freeze()
