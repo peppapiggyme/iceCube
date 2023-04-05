@@ -72,7 +72,7 @@ LOGGER.info(f"using {DEVICE}")
 plt.set_loglevel("info")
 
 # paths
-BASE_PATH = "/root/autodl-tmp/kaggle/"
+BASE_PATH = "/home/zhangbw/Documents/projects/iceCube-kaggle/kaggle/"
 MODEL_PATH = BASE_PATH + "../models/"
 PATH = os.path.join(BASE_PATH, "icecube-neutrinos-in-deep-ice")
 FILES_TRAIN, BATCHES_TRAIN = walk_dir(os.path.join(PATH, "train"), BATCHES_TRAIN)
