@@ -75,6 +75,7 @@ plt.set_loglevel("info")
 BASE_PATH = "/root/autodl-tmp/kaggle/"
 MODEL_PATH = BASE_PATH + "../models/"
 PATH = os.path.join(BASE_PATH, "icecube-neutrinos-in-deep-ice")
+PRED_PATH = os.path.join(BASE_PATH, "working", "prediction")
 FILES_TRAIN, BATCHES_TRAIN = walk_dir(os.path.join(PATH, "train"), BATCHES_TRAIN)
 FILES_TEST, BATCHES_TEST = walk_dir(os.path.join(PATH, "train"), BATCHES_TEST)
 FILE_TRAIN_META = os.path.join(PATH, "train_meta.parquet")
@@ -201,32 +202,40 @@ def get_target_angles(batches):
     for b in file.iter_batches(batch_size=EVENTS_PER_FILE, columns=["event_id","batch_id","azimuth","zenith"]):    
         if len(tmp) == 0:
             break
-        batch_df = b.to_pandas()
-        batch_id = batch_df.batch_id[0]
+        true_df = b.to_pandas()
+        batch_id = true_df.batch_id[0]
         if batch_id in tmp:      
-            batch_df.event_id= batch_df.event_id.astype(np.int64)      
-            batch_df.azimuth = batch_df.azimuth.astype(np.float32)
-            batch_df.zenith  = batch_df.zenith.astype(np.float32)    
-            batch_df = batch_df[["event_id", "batch_id", "azimuth", "zenith"]]
-            res =  batch_df if res is None else pd.concat((res, batch_df))            
+            true_df.event_id= true_df.event_id.astype(np.int64)      
+            true_df.azimuth = true_df.azimuth.astype(np.float32)
+            true_df.zenith  = true_df.zenith.astype(np.float32)    
+            true_df = true_df[["event_id", "batch_id", "azimuth", "zenith"]]
+            res =  true_df if res is None else pd.concat((res, true_df))            
             tmp.remove(batch_id)
     return res
 
 
+def get_reco_angles(batches):
+    res = None
+    for b in batches:
+        file_name = f"pred_{b}.parquet"
+        reco_df = pd.read_parquet(os.path.join(PRED_PATH, file_name))
+        reco_df["azimuth"] = np.remainder(reco_df["azimuth"], 2 * np.pi)
+        res =  reco_df if res is None else pd.concat((res, reco_df))
+    return res            
+
+
 def prepare_batch(df, sensor):
     df["event_id"] = df.index.astype(np.int64)
-    # remove auxiliary
-    # df = df[~df.auxiliary]
     
     df = df.reset_index(drop=True)
     df.charge = df.charge.astype(np.float32)
     df.charge = np.clip(df.charge, 0, 4)
-    times = df.groupby("event_id").agg(
-        t_median = ("time", np.median),
+    times = df[~df.auxiliary].groupby("event_id").agg(
+        t_min = ("time", np.min),
     )
     
     df = df.merge(times, on="event_id")
-    df.time = ((df.time - df.t_median) * 0.299792458e-3).astype(np.float32)
+    df.time = ((df.time - df.t_min) * 0.299792458e-3).astype(np.float32)
     df = pd.merge(df, sensor, on="sensor_id")
 
     df["qz"] = df.charge * df.z
@@ -266,13 +275,13 @@ def plane_fit(df, c, a, x, y, z, k=0, kt=0, kq=0, kaux=1, fun=None, eps=1e-8):
     # weighted by ...
     w = torch.pow(c, kq) \
         * torch.exp(-k * torch.square(z - z_avg)) \
-        * torch.exp(-kt * torch.square(t)) \
+        * torch.exp(-kt * t) \
         * (1 - kaux * a)
 
-    w = w # .to(DEVICE)
-    x = x # .to(DEVICE)
-    y = y # .to(DEVICE)
-    z = z # .to(DEVICE)
+    # w = w.to(DEVICE)
+    # x = x.to(DEVICE)
+    # y = y.to(DEVICE)
+    # z = z.to(DEVICE)
 
     # weighted values
     xw = (x*w); xxw = (x*x*w); xyw = (x*y*w)
@@ -292,23 +301,22 @@ def plane_fit(df, c, a, x, y, z, k=0, kt=0, kq=0, kaux=1, fun=None, eps=1e-8):
     coeff = solve_linear(xw, yw, zw, xxw, yyw, zzw, xyw, yzw, zxw)
     error = torch.sum(w * (z - coeff[0] * x - coeff[1] * y - coeff[2])) / torch.sum(w)
     error *= 1e9
-    good_hits = w.shape[0] - w[a > 0.9].shape[0]
+    good_hits = (w.shape[0] - w[a > 0.9].shape[0]) / w.shape[0]
+    hits = w.shape[0]
 
-    ret = torch.tensor([[coeff[0], coeff[1], -1, torch.square(error), good_hits]])
+    ret = torch.tensor([[coeff[0], coeff[1], -1, torch.square(error), good_hits, hits]])
     ret[:, :3] /= torch.sqrt(coeff[0]**2 + coeff[1]**2 + 1)
 
     return ret
 
 
 def prepare_df_for_plane(df):
-    # remove auxiliary
-    # df = df[~df.auxiliary]
-    
+
     df = df.reset_index(drop=True)
     df.charge = df.charge.astype(np.float32)
     df.charge = np.clip(df.charge, 0, 4)
-    t_median = np.median(df.time)
-    df.time = ((df.time - t_median) * 0.299792458e-3).astype(np.float32)
+    t_min = np.min(df = df[~df.auxiliary].time)
+    df.time = ((df.time - t_min) * 0.299792458e-3).astype(np.float32)
     df.x *= 1e-3; df.y *= 1e-3; df.z *= 1e-3
     
     df["qz"] = df.charge * df.z
@@ -319,6 +327,7 @@ def prepare_df_for_plane(df):
 
     centre["z_avg"] = centre.qzsum / centre.qsum
     df = pd.merge(df, centre[["z_avg"]], on=["x", "y"])
+    df = df.sort_values(["time"])
 
     return df[["z_avg", "time"]]
 

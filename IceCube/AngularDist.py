@@ -1,7 +1,7 @@
 import numpy as np
 
 def angular_dist_score(az_true, zen_true, az_pred, zen_pred):
-    '''
+    """
     calculate the MAE of the angular distance between two directions.
     The two vectors are first converted to cartesian unit vectors,
     and then their scalar product is computed, which is equal to
@@ -25,7 +25,7 @@ def angular_dist_score(az_true, zen_true, az_pred, zen_pred):
     
     dist : float
         mean over the angular distance(s) in radian
-    '''
+    """
     
     if not (np.all(np.isfinite(az_true)) and
             np.all(np.isfinite(zen_true)) and
