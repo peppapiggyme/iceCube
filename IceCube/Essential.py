@@ -55,7 +55,7 @@ BATCHES_FIT = [1]
 BATCHES_TEST = list(range(1, 21))
 
 # basic settings
-LOGGER = get_logger("GNN", "DEBUG")
+LOGGER = get_logger("IceCube", "DEBUG")
 SEED = 42
 np.random.seed(SEED)
 torch.manual_seed(SEED)
@@ -201,7 +201,7 @@ def angle_errors(n1, n2, eps=1e-8):
 def get_target_angles(batches):
     res = None
     file = pq.ParquetFile(FILE_TRAIN_META)
-    tmp = copy.copy(batches)
+    tmp = set(copy.copy(batches))
     for b in file.iter_batches(batch_size=EVENTS_PER_FILE, columns=["event_id","batch_id","azimuth","zenith"]):    
         if len(tmp) == 0:
             break
