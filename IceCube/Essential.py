@@ -249,7 +249,7 @@ def solve_linear(xw, yw, zw, xxw, yyw, zzw, xyw, yzw, zxw):
         return torch.zeros((3, ))
 
 
-def plane_fit(df, k=0, kt=0, kq=0, fun=None, eps=1e-8):
+def plane_fit(df, k=0, kt=0, fun=None, eps=1e-8):
     z_avg = series2tensor(df.z_avg)
     t = series2tensor(df.time)
     c = series2tensor(df.charge)
@@ -258,9 +258,8 @@ def plane_fit(df, k=0, kt=0, kq=0, fun=None, eps=1e-8):
     z = series2tensor(df.z)
 
     # weighted by ...
-    w = torch.exp(-k * torch.square(z - z_avg)) \
-        * torch.exp(-kt * t) \
-        * torch.pow(c, kq)
+    w = torch.exp(-k * torch.abs(z - z_avg)) \
+        * torch.exp(-kt * t)
 
     # weighted values
     xw = (x*w); xxw = (x*x*w); xyw = (x*y*w)
@@ -270,7 +269,8 @@ def plane_fit(df, k=0, kt=0, kq=0, fun=None, eps=1e-8):
     xw = torch.sum(xw); xxw = torch.sum(xxw); xyw = torch.sum(xyw) 
     yw = torch.sum(yw); yyw = torch.sum(yyw); yzw = torch.sum(yzw) 
     zw = torch.sum(zw); zzw = torch.sum(zzw); zxw = torch.sum(zxw) 
-    sumw = torch.sum(w); sumc = torch.sum(w*c); dt = torch.median(t)
+    sumw = torch.sum(w); sumc = torch.sum(w*c); sumt = torch.sum(w*t)
+    dt = torch.median(t)
 
     sumw += eps
     xw /= sumw; xxw /= sumw; xyw /= sumw
@@ -281,11 +281,15 @@ def plane_fit(df, k=0, kt=0, kq=0, fun=None, eps=1e-8):
     error = torch.sum((z - coeff[0] * x - coeff[1] * y - coeff[2]))
     error *= 1e3
     hits = w.shape[0]
+    std_x = x.std()
+    std_z = z.std()
+    std_t = t.std()
     unique_x = torch.unique(x).shape[0]
-    unique_y = torch.unique(y).shape[0]
     unique_z = torch.unique(z).shape[0]
 
-    ret = torch.tensor([[coeff[0], coeff[1], -1, torch.square(error), hits, sumc, dt, unique_x, unique_y, unique_z]])
+    ret = torch.tensor([[coeff[0], coeff[1], -1,
+                         torch.square(error), hits, sumw, sumc, sumt, dt,
+                         std_x, std_z, std_t, unique_x, unique_z]])
     ret[:, :3] /= torch.sqrt(coeff[0]**2 + coeff[1]**2 + 1)
 
     return ret
