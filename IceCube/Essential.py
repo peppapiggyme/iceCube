@@ -110,31 +110,6 @@ def prepare_sensors(scale=None):
 
     return sensors
 
-
-def Rx(theta):
-    return np.array([
-        [1,  0,             0            ],
-        [0,  np.cos(theta), np.sin(theta)],
-        [0, -np.sin(theta), np.cos(theta)]
-    ])
-
-
-def Ry(theta):
-    return np.array([
-        [ np.cos(theta), 0, np.sin(theta)],
-        [ 0,             1, 0            ],
-        [-np.sin(theta), 0, np.cos(theta)]
-    ])
-
-
-def Rz(theta):
-    return np.array([
-        [ np.cos(theta), np.sin(theta), 0],
-        [-np.sin(theta), np.cos(theta), 0],
-        [ 0,             0,             1]
-    ])
-
-
 def angle_to_xyz(angles_b):
     az, zen = angles_b.t()
     x = torch.cos(az) * torch.sin(zen)
