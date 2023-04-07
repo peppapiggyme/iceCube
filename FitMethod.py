@@ -52,10 +52,9 @@ def solve_linear(point):
 
 def plane_fit(df, k=0, kt=0, kq=0, eps=1e-8):
     # weighted by ...
-    df["w"] = np.exp(-k * np.square(df.z - df.z_avg)) \
-        * np.exp(-kt * df.time) \
-        * np.power(df.charge, kq)
-
+    df["w"] = np.exp(-k * np.abs(df.z - df.z_avg)) \
+        * np.exp(-kt * df.time)
+    
     # weighted values
     df["xw"] = df.x * df.w; df["xxw"] = df.x * df.x * df.w; df["xyw"] = df.x * df.y * df.w
     df["yw"] = df.y * df.w; df["yyw"] = df.y * df.y * df.w; df["yzw"] = df.y * df.z * df.w
@@ -84,7 +83,7 @@ def plane_fit(df, k=0, kt=0, kq=0, eps=1e-8):
 
 
 def func(x):
-    coeff = plane_fit(pulses_df, x[0], x[1], x[2])
+    coeff = plane_fit(pulses_df, x[0], x[1])
     LOGGER.debug(f"coeff\n{coeff}")
     norm = np.sqrt(coeff[:, 0]**2 + coeff[:, 1]**2 + 1)[:, np.newaxis]
     unit_vec = np.array([coeff[:, 0], coeff[:, 1], -1*np.ones(coeff[:, 1].shape)]).T
@@ -92,7 +91,7 @@ def func(x):
     # Rot = np.linalg.multi_dot([Rz(x[4]), Ry(x[3]), Rx(x[2])])
     # unit_vec = np.einsum("mk,bm->bk", Rot, unit_vec)
     prod = np.abs(np.sum(unit_vec * n, axis=1)).mean()
-    LOGGER.info(f"prod = {prod}, k = {x[0]:.6f}, kt = {x[1]:.6f}, kq = {x[2]:.6f}")
+    LOGGER.info(f"prod = {prod}, k = {x[0]:.6f}, kt = {x[1]:.6f}")
 
     # err, az, ze = angle_errors(svd.values, n)
     # LOGGER.info(f"svd result err = {err.mean()}")
@@ -110,7 +109,6 @@ def save_parameters(res, file_path):
     param = {
         "k"       : float(res.x[0]),
         "kt"      : float(res.x[1]),
-        "kq"      : float(res.x[2]),
         "fun"     : float(res.fun),
     }
 
@@ -142,20 +140,20 @@ if __name__ == "__main__":
     n = true_df[["nx","ny","nz"]].to_numpy()
 
     """ Step 1: find global minimum (roughly) """
-    # +-------+------+--------+-------+
-    # | Bound |  k   |   kt   |   kq  |
-    # +-------+------+--------+-------+
-    bounds = [(0, 10), (0, 10), (0, 5)]
-    # +-------+------+--------+-------+
-    res = differential_evolution(func, bounds, maxiter=20, popsize=12)
-    LOGGER.info(res.x)
-    LOGGER.info(res.fun)
-    save_parameters(res, "../logs/parameters.yaml")
+    # # +-------+------+--------+
+    # # | Bound |  k   |   kt   |
+    # # +-------+------+--------+
+    # bounds = [(0, 10), (0, 10)]
+    # # +-------+------+--------+
+    # res = differential_evolution(func, bounds, maxiter=100, popsize=12)
+    # LOGGER.info(res.x)
+    # LOGGER.info(res.fun)
+    # save_parameters(res, "../logs/parameters.yaml")
     
     """ Step 2: find global minimum (roughly) """
-    # x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kq']]
-    # res = minimize(func, x0, method="Nelder-Mead", tol=1e-6)
-    # save_parameters(res, "../logs/parameters_local.yaml")    
+    x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kt']]
+    res = minimize(func, x0, method="Nelder-Mead", tol=1e-6)
+    save_parameters(res, "../logs/parameters_local.yaml")    
     
     """ Test the best-fit parameters """
     # x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kq']]

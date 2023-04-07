@@ -19,9 +19,6 @@ def BoostedDecisionTree(X, y, tree_args, boosting_args):
     score = clf.decision_function(X)
     y_hat = clf.predict(X)
     
-    accuracy = accuracy_score(y, y_hat)
-    LOGGER.info(f"Train accuracy: {accuracy * 100:.2f}%")
-
     return y_hat, score, clf
 
 
@@ -29,18 +26,22 @@ def Train(X, y, error, errorx, tree_args, boosting_args, tag):
     # train the model
     LOGGER.info(f"Starting training ... {tag}")
     y_hat, _, clf = BoostedDecisionTree(X, y, tree_args, boosting_args)
-    # save the model
-    LOGGER.info(f"Finished training, saving model ... {tag}")
-    pickle.dump(clf, open(os.path.join(MODEL_PATH, "BDT_clf.", tag, ".sklearn"), "wb"))
 
     # Evaluate accuracy
+    accuracy = accuracy_score(y, y_hat)
+    LOGGER.info(f"train accuracy of {tag} -> {accuracy*100:.2f}%")
     error[y_hat] = errorx[y_hat]
-    LOGGER.info(f"error of {tag}-> {error.mean()}")
+    LOGGER.info(f"error of {tag} -> {error.mean()}")
+
+    # save the model
+    LOGGER.info(f"Finished training, saving model ... {tag}")
+    pickle.dump(clf, open(os.path.join(MODEL_PATH, f"BDT_clf.{tag}.sklearn"), "wb"))
 
 
 if __name__ == "__main__":
     # batches extracted by GNN_test.py
     batches = list(range(1, 21))
+    # batches = [1]
     threads = list()
 
     # region prepare
@@ -72,8 +73,11 @@ if __name__ == "__main__":
 
     # reco_df inputs
     reco = reco_df[["fit_error", "sumc", "hits", "zenith", "ez", "dt", "unique_x", "unique_z"]].to_numpy()
-    reco[:, 0] = np.log10(reco[:, 0] + 1e-8)
-    reco[:, 1] = np.log10(reco[:, 1] + 1e-8)
+    reco[:, 0] = np.log10(reco[:, 0] / reco[:, 2] + 1e-6)
+    reco[:, 1] = np.log10(reco[:, 1] + 1e-6)
+    reco[:, 3] = np.sin(reco[:, 3]) ** 2
+    reco[:, 5] = np.log10(reco[:, 5] + 1e-3)
+    xe = np.arccos(xe)
 
     # inputs
     X = np.concatenate([reco, np.abs(xe[:, np.newaxis])], axis=1)

@@ -34,8 +34,8 @@ def produce_prediction(model, parquet_dir, meta_dir, batch_num=1):
     
     res = pd.DataFrame(pred, 
         columns=["x", "y", "z", "azimuth", "zenith",
-                 "ex", "ey", "ez", "fit_error", "hits", "sumc", "dt", 
-                 "unique_x", "unique_y", "unique_z"])
+                 "ex", "ey", "ez", "fit_error", "hits", "sumw", "sumc", "sumt", "dt", 
+                 "std_x", "std_z", "std_t", "unique_x", "unique_z"])
     res.to_parquet(output_file)
     print(res)
 
