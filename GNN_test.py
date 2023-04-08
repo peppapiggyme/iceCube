@@ -50,7 +50,7 @@ if __name__ == "__main__":
     format = ModelFormat.ckpt
 
     file_pth = "official-pretrained.pth"
-    file_ckpt = "pretrained-800000.ckpt"
+    file_ckpt = FILE_GNN
 
     parquet_dir = os.path.join(PATH, "train")
     meta_dir = os.path.join(PATH, "train_meta")
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         model.load_state_dict(weights)
         LOGGER.info(f"loaded {file_pth}")
     elif format == ModelFormat.ckpt:
-        model = Model.load_from_checkpoint(os.path.join(MODEL_PATH, file_ckpt))
+        model = Model.load_from_checkpoint(file_ckpt)
         LOGGER.info(f"loaded {file_ckpt}")
 
     model.eval()

@@ -52,7 +52,7 @@ BATCHES_TRAIN = list(range(101, 601))
 BATCHES_VALID = list(range(61, 80))
 # BATCHES_FIT = list(range(1, 51, 10))
 BATCHES_FIT = [1]
-BATCHES_TEST = list(range(1, 21))
+BATCHES_TEST = list(range(1, 61)) + list(range(81, 100))
 
 # basic settings
 LOGGER = get_logger("IceCube", "DEBUG")
@@ -73,7 +73,8 @@ plt.set_loglevel("info")
 
 # paths
 BASE_PATH = "/root/autodl-tmp/kaggle/"
-MODEL_PATH = BASE_PATH + "../models/"
+MODEL_PATH = os.path.join(BASE_PATH, "input", "ice-cube-model")
+OUTPUT_PATH = os.path.join(BASE_PATH, "working")
 PATH = os.path.join(BASE_PATH, "icecube-neutrinos-in-deep-ice")
 PRED_PATH = os.path.join(BASE_PATH, "working", "prediction")
 FILES_TRAIN, BATCHES_TRAIN = walk_dir(os.path.join(PATH, "train"), BATCHES_TRAIN)
@@ -81,8 +82,9 @@ FILES_TEST, BATCHES_TEST = walk_dir(os.path.join(PATH, "train"), BATCHES_TEST)
 FILE_TRAIN_META = os.path.join(PATH, "train_meta.parquet")
 FILE_TEST_META = os.path.join(PATH, "train_meta.parquet")
 FILE_SENSOR_GEO = os.path.join(PATH, "sensor_geometry.csv")
-FILE_ICE_TRANS = os.path.join(PATH, "ice_transparency_info.csv")
-FILE_PARAM = os.path.join(PATH, "parameters.yaml")
+FILE_GNN = os.path.join(MODEL_PATH, "finetuned.ckpt")
+FILE_BDT = os.path.join(MODEL_PATH, "BDT_clf.sklearn")
+FILE_PARAM = os.path.join(MODEL_PATH, "parameters_local.yaml")
 LOGGER.info(f"{len(FILES_TRAIN)} files for training")
 LOGGER.info(f"{len(FILES_TEST)} files for testing")
 memory_check(LOGGER)
