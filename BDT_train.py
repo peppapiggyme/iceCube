@@ -40,11 +40,9 @@ def Train(X, y, error, errorx, tree_args, boosting_args, tag):
 
 if __name__ == "__main__":
     # batches extracted by GNN_test.py
-    batches = list(range(1, 21))
+    batches = list(range(1, 11))
     # batches = [1]
     threads = list()
-
-    # region prepare
 
     # ground truth
     true_df = get_target_angles(batches)
@@ -54,6 +52,7 @@ if __name__ == "__main__":
 
     # reconstructed directions
     reco_df = get_reco_angles(batches)
+    reco_df[np.isnan(reco_df)] = 0
     print(reco_df.head(5))
     n_hat = reco_df[["x", "y", "z"]].to_numpy()
 
@@ -83,7 +82,7 @@ if __name__ == "__main__":
     xe = np.arccos(xe)
 
     # inputs
-    X = np.concatenate([reco, np.abs(xe[:, np.newaxis])], axis=1)
+    X = np.concatenate([reco, xe[:, np.newaxis]], axis=1)
     LOGGER.info(f"input shape = {X.shape}")
 
     # endregion
@@ -231,5 +230,6 @@ if __name__ == "__main__":
     # starting training
     _ = [t.start() for t in threads]
     _ = [t.join()  for t in threads]
-
+    
     LOGGER.info("All threads are finished")
+
