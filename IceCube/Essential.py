@@ -50,8 +50,7 @@ EVENTS_PER_FILE = 200_000
 
 BATCHES_TRAIN = list(range(101, 601))
 BATCHES_VALID = list(range(61, 80))
-# BATCHES_FIT = list(range(1, 51, 10))
-BATCHES_FIT = [1]
+BATCHES_FIT = list(range(81, 86))
 BATCHES_TEST = list(range(1, 21))
 
 # basic settings
