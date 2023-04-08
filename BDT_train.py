@@ -72,11 +72,14 @@ if __name__ == "__main__":
     idx = error > errorx
 
     # reco_df inputs
-    reco = reco_df[["fit_error", "sumc", "hits", "zenith", "ez", "dt", "unique_x", "unique_z"]].to_numpy()
-    reco[:, 0] = np.log10(reco[:, 0] / reco[:, 2] + 1e-6)
-    reco[:, 1] = np.log10(reco[:, 1] + 1e-6)
-    reco[:, 3] = np.sin(reco[:, 3]) ** 2
-    reco[:, 5] = np.log10(reco[:, 5] + 1e-3)
+    reco_df["fit_error"] = np.log10(reco_df["fit_error"] / reco_df["hits"] + 1e-6)
+    reco_df["sumw"] = np.log10(reco_df["sumw"] + 1e-3)
+    reco_df["sumc"] = np.log10(reco_df["sumc"] + 1e-3)
+    reco_df["sumt"] = np.log10(reco_df["sumt"] + 1e-3)
+    reco_df["dt"] = np.log10(reco_df["dt"] + 1e-3)
+    reco_df["std_t"] = np.tanh(reco_df["std_t"])
+    reco_df["std_z"] = np.tanh(reco_df["std_z"])
+    reco = reco_df[["fit_error", "sumw", "sumc", "sumt", "dt", "std_t", "std_z", "unique_x", "zenith", "ez"]].to_numpy()
     xe = np.arccos(xe)
 
     # inputs
