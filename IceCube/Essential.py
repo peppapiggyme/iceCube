@@ -282,9 +282,9 @@ def plane_fit(df, k=0, kt=0, fun=None, eps=1e-8):
     error = torch.sum((z - coeff[0] * x - coeff[1] * y - coeff[2]))
     error *= 1e3
     hits = w.shape[0]
-    std_x = x.std()
-    std_z = z.std()
-    std_t = t.std()
+    std_x = x.std() # might be none?
+    std_z = z.std() # might be none?
+    std_t = t.std() # might be none?
     unique_x = torch.unique(x).shape[0]
     unique_z = torch.unique(z).shape[0]
 
