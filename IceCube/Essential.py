@@ -51,7 +51,7 @@ EVENTS_PER_FILE = 200_000
 BATCHES_TRAIN = list(range(101, 601))
 BATCHES_VALID = list(range(61, 80))
 BATCHES_FIT = list(range(81, 86))
-BATCHES_TEST = list(range(1, 61)) + list(range(81, 100))
+BATCHES_TEST = list(range(1, 61)) + list(range(81, 101))
 
 # basic settings
 LOGGER = get_logger("IceCube", "DEBUG")
@@ -233,7 +233,7 @@ def prepare_batch(df, sensor):
     return df
 
 
-def solve_linear(xw, yw, zw, xxw, yyw, zzw, xyw, yzw, zxw):
+def solve_linear(xw, yw, zw, xxw, yyw, xyw, yzw, zxw):
     A = torch.tensor([
         [xxw, xyw, xw],
         [xyw, yyw, yw],
@@ -265,20 +265,20 @@ def plane_fit(df, k=0, kt=0, fun=None, eps=1e-8):
     # weighted values
     xw = (x*w); xxw = (x*x*w); xyw = (x*y*w)
     yw = (y*w); yyw = (y*y*w); yzw = (y*z*w)
-    zw = (z*w); zzw = (z*z*w); zxw = (z*x*w)  
+    zw = (z*w); zxw = (z*x*w)  
 
     xw = torch.sum(xw); xxw = torch.sum(xxw); xyw = torch.sum(xyw) 
     yw = torch.sum(yw); yyw = torch.sum(yyw); yzw = torch.sum(yzw) 
-    zw = torch.sum(zw); zzw = torch.sum(zzw); zxw = torch.sum(zxw) 
+    zw = torch.sum(zw); zxw = torch.sum(zxw) 
     sumw = torch.sum(w); sumc = torch.sum(w*c); sumt = torch.sum(w*t)
     dt = torch.median(t)
 
     sumw += eps
     xw /= sumw; xxw /= sumw; xyw /= sumw
     yw /= sumw; yyw /= sumw; yzw /= sumw
-    zw /= sumw; zzw /= sumw; zxw /= sumw
+    zw /= sumw; zxw /= sumw
 
-    coeff = solve_linear(xw, yw, zw, xxw, yyw, zzw, xyw, yzw, zxw)
+    coeff = solve_linear(xw, yw, zw, xxw, yyw, xyw, yzw, zxw)
     error = torch.sum((z - coeff[0] * x - coeff[1] * y - coeff[2]))
     error *= 1e3
     hits = w.shape[0]

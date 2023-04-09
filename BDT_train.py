@@ -40,7 +40,7 @@ def Train(X, y, error, errorx, tree_args, boosting_args, tag):
 
 if __name__ == "__main__":
     # batches extracted by GNN_test.py
-    batches = list(range(1, 11))
+    batches = list(range(1, 21))
     # batches = [1]
     threads = list()
 
@@ -124,96 +124,10 @@ if __name__ == "__main__":
     )
 
     # -------------------------------------------------------------------------
-    # LowLR
+    # BaseMore
     # -------------------------------------------------------------------------
     tree_args = {
         "max_depth" : 2, 
-        "random_state" : SEED, 
-    }
-
-    boosting_args = {
-        "n_estimators" : 800, 
-        "learning_rate" : 0.6, 
-        "random_state" : SEED,
-    }
-
-    threads.append(
-        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "LowLR"))
-    )
-
-    # -------------------------------------------------------------------------
-    # HighLR
-    # -------------------------------------------------------------------------
-    tree_args = {
-        "max_depth" : 2, 
-        "random_state" : SEED, 
-    }
-
-    boosting_args = {
-        "n_estimators" : 800, 
-        "learning_rate" : 1.0, 
-        "random_state" : SEED,
-    }
-
-    # -------------------------------------------------------------------------
-    # DeepLowLR
-    # -------------------------------------------------------------------------
-    tree_args = {
-        "max_depth" : 3, 
-        "random_state" : SEED, 
-    }
-
-    boosting_args = {
-        "n_estimators" : 800, 
-        "learning_rate" : 0.6, 
-        "random_state" : SEED,
-    }
-
-    threads.append(
-        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "DeepLowLR"))
-    )
-
-    # -------------------------------------------------------------------------
-    # DeepHighLR
-    # -------------------------------------------------------------------------
-    tree_args = {
-        "max_depth" : 3, 
-        "random_state" : SEED, 
-    }
-
-    boosting_args = {
-        "n_estimators" : 800, 
-        "learning_rate" : 1.0, 
-        "random_state" : SEED,
-    }
-
-    threads.append(
-        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "DeepHighLR"))
-    )
-
-    # -------------------------------------------------------------------------
-    # DeepLess
-    # -------------------------------------------------------------------------
-    tree_args = {
-        "max_depth" : 3, 
-        "random_state" : SEED, 
-    }
-
-    boosting_args = {
-        "n_estimators" : 400, 
-        "learning_rate" : 0.8, 
-        "random_state" : SEED,
-    }
-
-    threads.append(
-        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "DeepLess"))
-    )
-
-    # -------------------------------------------------------------------------
-    # DeepMore
-    # -------------------------------------------------------------------------
-    tree_args = {
-        "max_depth" : 3, 
         "random_state" : SEED, 
     }
 
@@ -224,7 +138,7 @@ if __name__ == "__main__":
     }
 
     threads.append(
-        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "DeepMore"))
+        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "BaseMore"))
     )
 
     # starting training

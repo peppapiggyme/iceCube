@@ -140,20 +140,20 @@ if __name__ == "__main__":
     n = true_df[["nx","ny","nz"]].to_numpy()
 
     """ Step 1: find global minimum (roughly) """
-    # # +-------+------+--------+
-    # # | Bound |  k   |   kt   |
-    # # +-------+------+--------+
-    # bounds = [(0, 10), (0, 10)]
-    # # +-------+------+--------+
-    # res = differential_evolution(func, bounds, maxiter=100, popsize=12)
-    # LOGGER.info(res.x)
-    # LOGGER.info(res.fun)
-    # save_parameters(res, "../logs/parameters.yaml")
+    # +-------+------+--------+
+    # | Bound |  k   |   kt   |
+    # +-------+------+--------+
+    bounds = [(0, 10), (0, 10)]
+    # +-------+------+--------+
+    res = differential_evolution(func, bounds, maxiter=100, popsize=12)
+    LOGGER.info(res.x)
+    LOGGER.info(res.fun)
+    save_parameters(res, "../logs/parameters.yaml")
     
     """ Step 2: find global minimum (roughly) """
-    x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kt']]
-    res = minimize(func, x0, method="Nelder-Mead", tol=1e-6)
-    save_parameters(res, "../logs/parameters_local.yaml")    
+    # x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kt']]
+    # res = minimize(func, x0, method="Nelder-Mead", tol=1e-6)
+    # save_parameters(res, "../logs/parameters_local.yaml")    
     
     """ Test the best-fit parameters """
     # x0 = [BEST_FIT_VALUES['k'], BEST_FIT_VALUES['kt'], BEST_FIT_VALUES['kq']]
