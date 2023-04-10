@@ -40,7 +40,7 @@ def Train(X, y, error, errorx, tree_args, boosting_args, tag):
 
 if __name__ == "__main__":
     # batches extracted by GNN_test.py
-    batches = list(range(1, 21))
+    batches = list(range(1, 58))
     # batches = [1]
     threads = list()
 
@@ -119,6 +119,24 @@ if __name__ == "__main__":
 
     threads.append(
         threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "Deep"))
+    )
+
+    # -------------------------------------------------------------------------
+    # DeepMore
+    # -------------------------------------------------------------------------
+    tree_args = {
+        "max_depth" : 3, 
+        "random_state" : SEED, 
+    }
+
+    boosting_args = {
+        "n_estimators" : 1200, 
+        "learning_rate" : 0.8, 
+        "random_state" : SEED,
+    }
+
+    threads.append(
+        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "DeepMore"))
     )
 
     # -------------------------------------------------------------------------
