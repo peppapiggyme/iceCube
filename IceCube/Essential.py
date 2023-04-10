@@ -220,16 +220,6 @@ def prepare_batch(df, sensor):
     df.time = ((df.time - df.t_min) * 0.299792458e-3).astype(np.float32)
     df = pd.merge(df, sensor, on="sensor_id")
 
-    df["qz"] = df.charge * df.z
-
-    centre = df.groupby(["event_id", "x", "y"]).agg(
-        qsum = ("charge", np.sum),
-        qzsum = ("qz", np.sum),
-    )
-
-    centre["z_avg"] = centre.qzsum / centre.qsum
-    df = pd.merge(df, centre[["z_avg"]], on=["event_id", "x", "y"])
-
     return df
 
 
@@ -250,8 +240,7 @@ def solve_linear(xw, yw, zw, xxw, yyw, xyw, yzw, zxw):
         return torch.zeros((3, ))
 
 
-def plane_fit(df, k=0, kt=0, fun=None, eps=1e-8):
-    z_avg = series2tensor(df.z_avg)
+def plane_fit(df, kt=0, fun=None, eps=1e-8):
     t = series2tensor(df.time)
     c = series2tensor(df.charge)
     x = series2tensor(df.x)
@@ -259,17 +248,13 @@ def plane_fit(df, k=0, kt=0, fun=None, eps=1e-8):
     z = series2tensor(df.z)
 
     # weighted by ...
-    w = torch.exp(-k * torch.abs(z - z_avg)) \
-        * torch.exp(-kt * t)
+    w = torch.exp(-kt * t)
 
     # weighted values
-    xw = (x*w); xxw = (x*x*w); xyw = (x*y*w)
-    yw = (y*w); yyw = (y*y*w); yzw = (y*z*w)
-    zw = (z*w); zxw = (z*x*w)  
+    xw = torch.sum(x*w); xxw = torch.sum(x*x*w); xyw = torch.sum(x*y*w)
+    yw = torch.sum(y*w); yyw = torch.sum(y*y*w); yzw = torch.sum(y*z*w)
+    zw = torch.sum(z*w); zxw = torch.sum(z*x*w)  
 
-    xw = torch.sum(xw); xxw = torch.sum(xxw); xyw = torch.sum(xyw) 
-    yw = torch.sum(yw); yyw = torch.sum(yyw); yzw = torch.sum(yzw) 
-    zw = torch.sum(zw); zxw = torch.sum(zxw) 
     sumw = torch.sum(w); sumc = torch.sum(w*c); sumt = torch.sum(w*t)
     dt = torch.median(t)
 
@@ -282,15 +267,12 @@ def plane_fit(df, k=0, kt=0, fun=None, eps=1e-8):
     error = torch.sum((z - coeff[0] * x - coeff[1] * y - coeff[2]))
     error *= 1e3
     hits = w.shape[0]
-    std_x = x.std() # might be none?
-    std_z = z.std() # might be none?
-    std_t = t.std() # might be none?
     unique_x = torch.unique(x).shape[0]
     unique_z = torch.unique(z).shape[0]
 
     ret = torch.tensor([[coeff[0], coeff[1], -1,
                          torch.square(error), hits, sumw, sumc, sumt, dt,
-                         std_x, std_z, std_t, unique_x, unique_z]])
+                         unique_x, unique_z]])
     ret[:, :3] /= torch.sqrt(coeff[0]**2 + coeff[1]**2 + 1)
 
     return ret
@@ -307,17 +289,8 @@ def prepare_df_for_plane(df):
     t_min = np.min(df.time)
     df.time = ((df.time - t_min) * 0.299792458e-3).astype(np.float32)
     df.x *= 1e-3; df.y *= 1e-3; df.z *= 1e-3
-    
-    df["qz"] = df.charge * df.z
-    centre = df.groupby(["x", "y"]).agg(
-        qsum = ("charge", np.sum),
-        qzsum = ("qz", np.sum),
-    )
 
-    centre["z_avg"] = centre.qzsum / centre.qsum
-    df = pd.merge(df, centre[["z_avg"]], on=["x", "y"])
-
-    return df[["z_avg", "time", "charge", "x", "y", "z"]]
+    return df[["time", "charge", "x", "y", "z"]]
 
 
 # Dataset

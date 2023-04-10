@@ -5,34 +5,6 @@ from scipy.optimize import differential_evolution, minimize, Bounds
 import pdb, yaml
 
 
-def svd_agg(x):
-    w = x[["w"]].values
-    x = x[["x", "y", "z"]].values
-    x = x * w
-    n = x.shape[0]
-    if n > 3:
-        x = np.split(x, [int(np.floor(n/3)), int(np.floor(2*n/3))])
-        x = np.concatenate([xx.mean(axis=0)[np.newaxis, :] for xx in x])
-
-    _, S, V = np.linalg.svd(x, full_matrices=False)
-    if V.shape == (0, 3):
-        V = np.zeros((3, 3))
-    elif V.shape == (1, 3):
-        V = np.concatenate((V, V, V))
-    elif V.shape == (2, 3):
-        tmp = np.zeros((3, 3))
-        tmp[:2, :] = V
-        tmp[2, :] = 2 * V[1, :] - V[0, :]
-        V = tmp
-    result = pd.DataFrame({"x": [V[0,0]], "y": [V[1,0]], "z": [V[2,0]]})
-    global i
-    i = i + 1
-    if i % 10000 == 0: 
-        memory_check(LOGGER)
-        LOGGER.info(f"processed {i} samples")
-    return result
-
-
 def solve_linear(point):
     A = np.array([
         [point.xxw, point.xyw, point.xw],
@@ -50,10 +22,9 @@ def solve_linear(point):
         return np.zeros((1, 3))
 
 
-def plane_fit(df, k=0, kt=0, kq=0, eps=1e-8):
+def plane_fit(df, kt=0, eps=1e-8):
     # weighted by ...
-    df["w"] = np.exp(-k * np.abs(df.z - df.z_avg)) \
-        * np.exp(-kt * df.time)
+    df["w"] = np.exp(-kt * df.time)
     
     # weighted values
     df["xw"] = df.x * df.w; df["xxw"] = df.x * df.x * df.w; df["xyw"] = df.x * df.y * df.w
@@ -66,8 +37,6 @@ def plane_fit(df, k=0, kt=0, kq=0, eps=1e-8):
         zw = ("zw", np.sum), zzw = ("zzw", np.sum), zxw = ("zxw", np.sum), 
         sumw = ("w", np.sum)
     ).reset_index()
-
-    # svd = df.groupby("event_id").apply(svd_agg)
 
     wtd.sumw += eps
     wtd.xw /= wtd.sumw; wtd.xxw /= wtd.sumw; wtd.xyw /= wtd.sumw
@@ -83,32 +52,21 @@ def plane_fit(df, k=0, kt=0, kq=0, eps=1e-8):
 
 
 def func(x):
-    coeff = plane_fit(pulses_df, x[0], x[1])
+    coeff = plane_fit(pulses_df, x[0])
     LOGGER.debug(f"coeff\n{coeff}")
     norm = np.sqrt(coeff[:, 0]**2 + coeff[:, 1]**2 + 1)[:, np.newaxis]
     unit_vec = np.array([coeff[:, 0], coeff[:, 1], -1*np.ones(coeff[:, 1].shape)]).T
     unit_vec /= norm
-    # Rot = np.linalg.multi_dot([Rz(x[4]), Ry(x[3]), Rx(x[2])])
-    # unit_vec = np.einsum("mk,bm->bk", Rot, unit_vec)
+
     prod = np.abs(np.sum(unit_vec * n, axis=1)).mean()
-    LOGGER.info(f"prod = {prod}, k = {x[0]:.6f}, kt = {x[1]:.6f}")
-
-    # err, az, ze = angle_errors(svd.values, n)
-    # LOGGER.info(f"svd result err = {err.mean()}")
-
-    # xe = np.sum(svd.values * unit_vec, axis=1)
-    # proj = svd - xe[:, np.newaxis] * unit_vec
-    # proj /= (np.linalg.norm(proj, axis=1, keepdims=True) + 1e-8)
-    # err, az, ze = angle_errors(proj.values, n)
-    # LOGGER.info(f"svd proj result err = {err.mean()}")
+    LOGGER.info(f"prod = {prod}, kt = {x[0]:.6f}")
 
     return prod
 
 
 def save_parameters(res, file_path):
     param = {
-        "k"       : float(res.x[0]),
-        "kt"      : float(res.x[1]),
+        "kt"      : float(res.x[0]),
         "fun"     : float(res.fun),
     }
 
@@ -140,11 +98,7 @@ if __name__ == "__main__":
     n = true_df[["nx","ny","nz"]].to_numpy()
 
     """ Step 1: find global minimum (roughly) """
-    # +-------+------+--------+
-    # | Bound |  k   |   kt   |
-    # +-------+------+--------+
-    bounds = [(0, 10), (0, 10)]
-    # +-------+------+--------+
+    bounds = [(0, 10)]
     res = differential_evolution(func, bounds, maxiter=100, popsize=12)
     LOGGER.info(res.x)
     LOGGER.info(res.fun)
