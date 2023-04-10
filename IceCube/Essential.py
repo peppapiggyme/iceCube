@@ -49,9 +49,10 @@ EVENTS_PER_FILE = 200_000
 # =============================================================================
 
 BATCHES_TRAIN = list(range(101, 601))
+BATCHES_TUNE = list(range(101, 660, 2))
 BATCHES_VALID = list(range(61, 80))
 BATCHES_FIT = list(range(81, 86))
-BATCHES_TEST = list(range(1, 61)) + list(range(81, 101))
+BATCHES_TEST = list(range(1, 101))
 
 # basic settings
 LOGGER = get_logger("IceCube", "DEBUG")
@@ -282,9 +283,6 @@ def plane_fit(df, k=0, kt=0, fun=None, eps=1e-8):
     error = torch.sum((z - coeff[0] * x - coeff[1] * y - coeff[2]))
     error *= 1e3
     hits = w.shape[0]
-    std_x = x.std()
-    std_z = z.std()
-    std_t = t.std()
     unique_x = torch.unique(x).shape[0]
     unique_z = torch.unique(z).shape[0]
 
@@ -324,7 +322,7 @@ def prepare_df_for_plane(df):
 class IceCube(IterableDataset):
     def __init__(
         self, parquet_dir, meta_dir, chunk_ids,
-        batch_size=200, max_pulses=200, shuffle=False, use_fit=False
+        batch_size=200, max_pulses=200, shuffle=False, use_fit=False, smear=False
     ):
         self.parquet_dir = parquet_dir
         self.meta_dir = meta_dir
@@ -333,6 +331,7 @@ class IceCube(IterableDataset):
         self.max_pulses = max_pulses
         self.shuffle = shuffle
         self.use_fit = use_fit
+        self.smear = smear
 
         if self.shuffle:
             random.shuffle(self.chunk_ids)
@@ -398,6 +397,12 @@ class IceCube(IterableDataset):
                     x = series2tensor(df.x)
                     y = series2tensor(df.y)
                     z = series2tensor(df.z)
+
+                    # smearing
+                    if self.smear and eid % 2 == 0: # smear half of the dataset
+                        t += np.random.normal(0, 1.2) # time resolution = 1.2ns
+                        c = np.random.gamma(c*10, 0.1) # poisson statistics of photoelectrics 
+
                     feat = torch.stack([x, y, z, t, c, a], dim=1)
 
                     batch_data = Data(x=feat, gt=meta[eid],
