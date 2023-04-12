@@ -40,7 +40,7 @@ def Train(X, y, error, errorx, tree_args, boosting_args, tag):
 
 if __name__ == "__main__":
     # batches extracted by GNN_test.py
-    batches = list(range(1, 58))
+    batches = list(range(1, 26))
     # batches = [1]
     threads = list()
 
@@ -71,19 +71,39 @@ if __name__ == "__main__":
     idx = error > errorx
 
     # reco_df inputs
-    reco_df["fit_error"] = np.log10(reco_df["fit_error"] / reco_df["hits"] + 1e-6)
-    reco_df["sumw"] = np.log10(reco_df["sumw"] + 1e-3)
-    reco_df["sumc"] = np.log10(reco_df["sumc"] + 1e-3)
-    reco_df["sumt"] = np.log10(reco_df["sumt"] + 1e-3)
-    reco_df["dt"] = np.log10(reco_df["dt"] + 1e-3)
-    reco_df["std_t"] = np.tanh(reco_df["std_t"])
-    reco_df["std_z"] = np.tanh(reco_df["std_z"])
-    reco = reco_df[["fit_error", "sumw", "sumc", "sumt", "dt", "std_t", "std_z", "unique_x", "zenith", "ez"]].to_numpy()
+    reco_df["error"] = np.log10(reco_df["error"] + 1e-6)
+    reco_df["sumq"] = np.log10(reco_df["sumq"] + 1e-3)
+    reco_df["dt_15"] = np.log10(reco_df["dt_15"] + 1e-3)
+    reco_df["dt_50"] = np.log10(reco_df["dt_50"] + 1e-3)
+    reco_df["dt_85"] = np.log10(reco_df["dt_85"] + 1e-3)
+    reco_df["kappa"] = np.log10(reco_df["kappa"] + 1e-3)
+    reco = reco_df[["kappa", "zenith", "error", "sumq", "qz", "dt_15", "dt_50", "dt_85", "ez", "uniq_x"]].to_numpy()
     xe = np.arccos(xe)
 
-    # inputs
-    X = np.concatenate([reco, xe[:, np.newaxis]], axis=1)
-    LOGGER.info(f"input shape = {X.shape}")
+    # trajectory display
+    col_xyzt = [
+        "x0", "y0", "z0", "t0",
+        "x1", "y1", "z1", "t1",
+        "x2", "y2", "z2", "t2",
+        "x3", "y3", "z3", "t3", ]
+    traj = reco_df[col_xyzt].values
+    traj = traj.reshape(-1, 4, 4)
+
+    v1 = 1e3 * (traj[:, 1, :3] - traj[:, 0, :3]) / (traj[:, 1, 3] - traj[:, 0, 3] + 1)[:, np.newaxis]
+    v2 = 1e3 * (traj[:, 2, :3] - traj[:, 1, :3]) / (traj[:, 2, 3] - traj[:, 1, 3] + 1)[:, np.newaxis]
+    v3 = 1e3 * (traj[:, 3, :3] - traj[:, 2, :3]) / (traj[:, 3, 3] - traj[:, 2, 3] + 1)[:, np.newaxis]
+
+    v1scale = np.linalg.norm(v1, axis=1, keepdims=True) + 1e-1
+    v2scale = np.linalg.norm(v2, axis=1, keepdims=True) + 1e-1
+    v3scale = np.linalg.norm(v3, axis=1, keepdims=True) + 1e-1
+
+    ev1 = np.sum(-v1 * e / v1scale, axis=1)
+    ev2 = np.sum(-v2 * e / v2scale, axis=1)
+    ev3 = np.sum(-v3 * e / v3scale, axis=1)
+
+    ev1 = np.arccos(ev1)
+    ev2 = np.arccos(ev2)
+    ev3 = np.arccos(ev3)
 
     # -------------------------------------------------------------------------
     # Baseline
@@ -99,15 +119,19 @@ if __name__ == "__main__":
         "random_state" : SEED,
     }
 
+    # inputs
+    X1 = np.concatenate([reco, xe[:, np.newaxis]], axis=1)
+    LOGGER.info(f"input shape = {X1.shape}")
+
     threads.append(
-        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "Baseline"))
+        threading.Thread(target=Train, args=(X1, idx, error, errorx, tree_args, boosting_args, "Baseline"))
     )
 
     # -------------------------------------------------------------------------
-    # Deep
+    # BaseEV
     # -------------------------------------------------------------------------
     tree_args = {
-        "max_depth" : 3, 
+        "max_depth" : 2, 
         "random_state" : SEED, 
     }
 
@@ -117,26 +141,12 @@ if __name__ == "__main__":
         "random_state" : SEED,
     }
 
-    threads.append(
-        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "Deep"))
-    )
-
-    # -------------------------------------------------------------------------
-    # DeepMore
-    # -------------------------------------------------------------------------
-    tree_args = {
-        "max_depth" : 3, 
-        "random_state" : SEED, 
-    }
-
-    boosting_args = {
-        "n_estimators" : 1200, 
-        "learning_rate" : 0.8, 
-        "random_state" : SEED,
-    }
+    # inputs
+    X2 = np.concatenate([reco, xe[:, np.newaxis], ev1[:, np.newaxis], ev2[:, np.newaxis], ev3[:, np.newaxis]], axis=1)
+    LOGGER.info(f"input shape = {X2.shape}")
 
     threads.append(
-        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "DeepMore"))
+        threading.Thread(target=Train, args=(X2, idx, error, errorx, tree_args, boosting_args, "BaseEV"))
     )
 
     # -------------------------------------------------------------------------
@@ -154,7 +164,25 @@ if __name__ == "__main__":
     }
 
     threads.append(
-        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "BaseMore"))
+        threading.Thread(target=Train, args=(X1, idx, error, errorx, tree_args, boosting_args, "BaseMore"))
+    )
+
+    # -------------------------------------------------------------------------
+    # BaseMoreEV
+    # -------------------------------------------------------------------------
+    tree_args = {
+        "max_depth" : 2, 
+        "random_state" : SEED, 
+    }
+
+    boosting_args = {
+        "n_estimators" : 1200, 
+        "learning_rate" : 0.8, 
+        "random_state" : SEED,
+    }
+
+    threads.append(
+        threading.Thread(target=Train, args=(X2, idx, error, errorx, tree_args, boosting_args, "BaseMoreEV"))
     )
 
     # starting training
