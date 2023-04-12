@@ -5,6 +5,25 @@ from scipy.optimize import differential_evolution, minimize, Bounds
 import pdb, yaml
 
 
+def prepare_batch(df, sensor):
+    df["event_id"] = df.index.astype(np.int64)    
+    df = df.reset_index(drop=True)
+
+    # remove auxiliary
+    df = df[~df.auxiliary]
+
+    df.charge = df.charge.astype(np.float32)
+    df.charge = np.clip(df.charge, 0, 4)
+    times = df.groupby("event_id").agg(
+        t_min = ("time", np.min),
+    )
+    
+    df = df.merge(times, on="event_id")
+    df.time = ((df.time - df.t_min) * 0.299792458e-3).astype(np.float32)
+    df = pd.merge(df, sensor, on="sensor_id")
+
+    return df
+
 def solve_linear(point):
     A = np.array([
         [point.xxw, point.xyw, point.xw],

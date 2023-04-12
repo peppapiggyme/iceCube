@@ -15,6 +15,7 @@ import torch.nn.init as init
 import torch.nn.functional as F
 from torch import Tensor
 from torch.utils.data import random_split, IterableDataset
+from torch.distributions import Gamma, Normal
 import torch_geometric
 from torch_geometric.data import Data, Batch
 from torch_geometric.utils import homophily
@@ -27,8 +28,7 @@ from torch_scatter import scatter_add, scatter_mean, scatter_max, scatter_min
 import random, copy, yaml
 from tqdm import tqdm
 import pyarrow.parquet as pq
-from sklearn.preprocessing import RobustScaler
-from scipy.interpolate import interp1d
+from math import floor
 
 from IceCube.Helper import *
 
@@ -201,27 +201,7 @@ def get_reco_angles(batches):
         reco_df = pd.read_parquet(os.path.join(PRED_PATH, file_name))
         reco_df["azimuth"] = np.remainder(reco_df["azimuth"], 2 * np.pi)
         res =  reco_df if res is None else pd.concat((res, reco_df))
-    return res            
-
-
-def prepare_batch(df, sensor):
-    df["event_id"] = df.index.astype(np.int64)    
-    df = df.reset_index(drop=True)
-
-    # remove auxiliary
-    df = df[~df.auxiliary]
-
-    df.charge = df.charge.astype(np.float32)
-    df.charge = np.clip(df.charge, 0, 4)
-    times = df.groupby("event_id").agg(
-        t_min = ("time", np.min),
-    )
-    
-    df = df.merge(times, on="event_id")
-    df.time = ((df.time - df.t_min) * 0.299792458e-3).astype(np.float32)
-    df = pd.merge(df, sensor, on="sensor_id")
-
-    return df
+    return res
 
 
 def solve_linear(xw, yw, zw, xxw, yyw, xyw, yzw, zxw):
@@ -241,56 +221,75 @@ def solve_linear(xw, yw, zw, xxw, yyw, xyw, yzw, zxw):
         return torch.zeros((3, ))
 
 
-def plane_fit(df, kt=0, fun=None, eps=1e-8):
+def feature_extraction(df, fun=None, eps=1e-8):                                           # list of variables
+    # sort by time
+    df.sort_values(["time"], inplace=True)
+
     t = series2tensor(df.time)
     c = series2tensor(df.charge)
     x = series2tensor(df.x)
     y = series2tensor(df.y)
     z = series2tensor(df.z)
 
-    # weighted by ...
-    w = torch.exp(-kt * t)
+    hits = t.numel()                                                                            # hits
 
     # weighted values
-    xw = torch.sum(x*w); xxw = torch.sum(x*x*w); xyw = torch.sum(x*y*w)
-    yw = torch.sum(y*w); yyw = torch.sum(y*y*w); yzw = torch.sum(y*z*w)
-    zw = torch.sum(z*w); zxw = torch.sum(z*x*w)  
+    Sx = torch.sum(x); Sxx = torch.sum(x*x); Sxy = torch.sum(x*y)
+    Sy = torch.sum(y); Syy = torch.sum(y*y); Syz = torch.sum(y*z)
+    Sz = torch.sum(z); Szx = torch.sum(z*x)
 
-    sumw = torch.sum(w); sumc = torch.sum(w*c); sumt = torch.sum(w*t)
-    dt = torch.median(t)
-
-    sumw += eps
-    xw /= sumw; xxw /= sumw; xyw /= sumw
-    yw /= sumw; yyw /= sumw; yzw /= sumw
-    zw /= sumw; zxw /= sumw
-
-    coeff = solve_linear(xw, yw, zw, xxw, yyw, xyw, yzw, zxw)
+    # error of plane estimate
+    coeff = solve_linear(Sx, Sy, Sz, Sxx, Syy, Sxy, Syz, Szx)
     error = torch.sum((z - coeff[0] * x - coeff[1] * y - coeff[2]))
-    error *= 1e3
-    hits = w.shape[0]
-    unique_x = torch.unique(x).shape[0]
-    unique_z = torch.unique(z).shape[0]
+    error = torch.square(error * 1e3)                                                           # error
 
-    ret = torch.tensor([[coeff[0], coeff[1], -1,
-                         torch.square(error), hits, sumw, sumc, sumt, dt,
-                         unique_x, unique_z]])
-    ret[:, :3] /= torch.sqrt(coeff[0]**2 + coeff[1]**2 + 1)
+    # plane norm vector
+    norm_vec = torch.tensor([coeff[0], coeff[1], -1], dtype=torch.float)
+    norm_vec /= torch.sqrt(coeff[0]**2 + coeff[1]**2 + 1)                                       # norm_vec -> (3, )
 
-    return ret
+    # delta t -> median time
+    dt = torch.quantile(t, torch.tensor([0.15, 0.50, 0.85], dtype=torch.float))                 # dt -> (3, )
+
+    # charge centre (vector)
+    sumq = torch.sum(c)                                                                         # sumq
+    meanq = sumq / hits                                                                         # meanq
+    qv = torch.tensor([torch.sum(x*c), torch.sum(y*c), torch.sum(z*c)], dtype=torch.float)
+    qv /= sumq                                                                                  # qv -> (3, )
+
+    # bright sensor ratio
+    bratio = c[c > 5 * meanq].numel() / hits                                                    # bratio
+
+    # grouping by time (remember to sort by time)
+    n_groups = 4                                                                                # xyzt -> (16, )
+
+    if hits > n_groups:
+        sec_len = floor(hits / n_groups)
+        remain_len = hits - (n_groups - 1) * sec_len
+        xyzt = series2tensor(df[["x", "y", "z", "time"]])
+        xyzt = torch.split(xyzt, [sec_len, sec_len, sec_len, remain_len])
+        xyzt = torch.concat([xx.mean(axis=0) for xx in xyzt])
+    else:
+        xyzt = torch.zeros(n_groups * 4)
+        _xxxx = list()
+        for i in range(hits):
+            _xxxx.append(x[i]); _xxxx.append(y[i]); _xxxx.append(z[i]); _xxxx.append(t[i])
+        xyzt[: hits * 4] = torch.tensor(_xxxx, dtype=torch.float)
+
+    # unique xyz
+    unique = torch.tensor([_x.unique().numel() for _x in [x, y, z]], dtype=torch.float)         # unique -> (3, )
+
+    # global features
+    glob_feat = torch.tensor([hits, error, sumq, meanq, bratio, ], dtype=torch.float)
+
+    return torch.concat([norm_vec, dt, qv, xyzt, unique, glob_feat]).unsqueeze(0)
 
 
-def prepare_df_for_plane(df):
+def prepare_feature(df):
     df = df.reset_index(drop=True)
-
     # remove auxiliary
     df = df[~df.auxiliary]
-
-    df.charge = df.charge.astype(np.float32)
-    df.charge = np.clip(df.charge, 0, 4)
-    t_min = np.min(df.time)
-    df.time = ((df.time - t_min) * 0.299792458e-3).astype(np.float32)
     df.x *= 1e-3; df.y *= 1e-3; df.z *= 1e-3
-
+    df.time -= np.min(df.time)
     return df[["time", "charge", "x", "y", "z"]]
 
 
@@ -298,7 +297,7 @@ def prepare_df_for_plane(df):
 class IceCube(IterableDataset):
     def __init__(
         self, parquet_dir, meta_dir, chunk_ids,
-        batch_size=200, max_pulses=200, shuffle=False, use_fit=False, smear=False
+        batch_size=200, max_pulses=200, shuffle=False, extra=False, smear=False
     ):
         self.parquet_dir = parquet_dir
         self.meta_dir = meta_dir
@@ -306,9 +305,9 @@ class IceCube(IterableDataset):
         self.batch_size = batch_size
         self.max_pulses = max_pulses
         self.shuffle = shuffle
-        self.use_fit = use_fit
+        self.extra = extra
         self.smear = smear
-
+        
         if self.shuffle:
             random.shuffle(self.chunk_ids)
 
@@ -376,18 +375,21 @@ class IceCube(IterableDataset):
 
                     # smearing
                     if self.smear and eid % 2 == 0: # smear half of the dataset
-                        t += np.random.normal(0, 1.2) # time resolution = 1.2ns
-                        c = np.random.gamma(c*10, 0.1) # poisson statistics of photoelectrics 
-
+                        # x, y, z are fixed ...
+                        dist_normal = Normal(0, 1.2) # time resolution = 1.2ns
+                        dist_gamma = Gamma(c * 10, 10) # poisson statistics of photoelectrics
+                        t += dist_normal.sample()
+                        c = dist_gamma.sample()
+                        
                     feat = torch.stack([x, y, z, t, c, a], dim=1)
 
                     batch_data = Data(x=feat, gt=meta[eid],
                         n_pulses=len(feat), eid=torch.tensor([eid]).long(),
                     )
 
-                    if self.use_fit:
-                        coeff = plane_fit(prepare_df_for_plane(df), **BEST_FIT_VALUES)
-                        setattr(batch_data, "plane", coeff)
+                    if self.extra:
+                        feats = feature_extraction(prepare_feature(df))
+                        setattr(batch_data, "extra_feat", feats)
 
                     batch.append(batch_data)
 

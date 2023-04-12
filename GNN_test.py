@@ -10,7 +10,7 @@ def produce_prediction(model, parquet_dir, meta_dir, batch_num=1):
     output_file = os.path.join(PRED_PATH, output_name)
 
     test_set = IceCube(
-        parquet_dir, meta_dir, [batch_num], batch_size=BATCH_SIZE, use_fit=True
+        parquet_dir, meta_dir, [batch_num], batch_size=500, extra=True
     )
 
     test_loader = DataLoader(
@@ -24,18 +24,30 @@ def produce_prediction(model, parquet_dir, meta_dir, batch_num=1):
         for i, data in tqdm(enumerate(test_loader)):
             pred_xyzk = model(data.to(DEVICE))
             angles = np.concatenate([
-               # +--------------------+------------------------------------+------------------+
-               # |   x, y, z, kappa   |           azimuth, zenith          |    fit outputs   |
-               # +--------------------+------------------------------------+------------------+
-                pred_xyzk[:, :3].cpu(), xyz_to_angle(pred_xyzk[:, :3]).cpu(), data.plane.cpu()
-               # +--------------------+------------------------------------+------------------+
+                # +-------------+------------------------------------+----------------------+
+                # | x, y, z, kp |           azimuth, zenith          |    extra features    |
+                # +-------------+------------------------------------+----------------------+
+                pred_xyzk.cpu(), xyz_to_angle(pred_xyzk[:, :3]).cpu(), data.extra_feat.cpu()
+                # +-------------+------------------------------------+----------------------+
             ], axis=1)
-            pred = angles if pred is None else np.concatenate([pred, angles]) 
-    
-    res = pd.DataFrame(pred, 
-        columns=["x", "y", "z", "azimuth", "zenith",
-                 "ex", "ey", "ez", "fit_error", "hits", "sumw", "sumc", "sumt", "dt", 
-                 "std_x", "std_z", "std_t", "unique_x", "unique_z"])
+            pred = angles if pred is None else np.concatenate([pred, angles])
+
+    col_xyzk = ["x", "y", "z", "kappa"]
+    col_angles = ["azimuth", "zenith"]
+    col_norm_vec = ["ex", "ey", "ez"]
+    col_dt = ["dt_15", "dt_50", "dt_85"]
+    col_qv = ["qx", "qy", "qz"]
+    col_xyzt = [
+        "x0", "y0", "z0", "t0",
+        "x1", "y1", "z1", "t1",
+        "x2", "y2", "z2", "t2",
+        "x3", "y3", "z3", "t3", ]
+    col_unique = ["uniq_x", "uniq_y", "uniq_z"]
+    col_glob_feat = ["hits", "error", "sumq", "meanq", "bratio"]
+    col_extra = col_norm_vec + col_dt + col_qv + \
+        col_xyzt + col_unique + col_glob_feat
+
+    res = pd.DataFrame(pred, columns=col_xyzk+col_angles+col_extra)
     res.to_parquet(output_file)
     print(res)
 
