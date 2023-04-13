@@ -40,26 +40,28 @@ def Train(X, y, error, errorx, tree_args, boosting_args, tag):
 
 if __name__ == "__main__":
     # batches extracted by GNN_test.py
-    batches = list(range(1, 26))
-    # batches = [1]
+    batches = list(range(1, 81))
+    # batches = list(range(1, 6))
+    LOGGER.info(f"{len(batches)} files for BDT training")
     threads = list()
 
     # ground truth
     true_df = get_target_angles(batches)
     true_df = angles2vector(true_df)
     print(true_df.head(5))
-    n = true_df[["nx","ny","nz"]].to_numpy()
 
     # reconstructed directions
     reco_df = get_reco_angles(batches)
     reco_df[np.isnan(reco_df)] = 0
     print(reco_df.head(5))
+
+    n = true_df[["nx","ny","nz"]].to_numpy()
     n_hat = reco_df[["x", "y", "z"]].to_numpy()
 
     e = reco_df[["ex", "ey", "ez"]].to_numpy()
-    xe = np.sum(n_hat * e, axis=1)
+    xe = np.sum(n_hat * e, axis=1, keepdims=True)
     print(xe.shape)
-    proj = n_hat - xe[:, np.newaxis] * e
+    proj = n_hat - xe * e
     proj /= (np.linalg.norm(proj, axis=1, keepdims=True) + 1e-8)
 
     error, az_error, ze_error = angle_errors(n, n_hat)
@@ -77,7 +79,8 @@ if __name__ == "__main__":
     reco_df["dt_50"] = np.log10(reco_df["dt_50"] + 1e-3)
     reco_df["dt_85"] = np.log10(reco_df["dt_85"] + 1e-3)
     reco_df["kappa"] = np.log10(reco_df["kappa"] + 1e-3)
-    reco = reco_df[["kappa", "zenith", "error", "sumq", "qz", "dt_15", "dt_50", "dt_85", "ez", "uniq_x"]].to_numpy()
+    columns = ["kappa", "zenith", "error", "sumq", "qz", "dt_50", "dt_85", "ez"]
+    reco = reco_df[columns].to_numpy()
     xe = np.arccos(xe)
 
     # trajectory display
@@ -97,13 +100,52 @@ if __name__ == "__main__":
     v2scale = np.linalg.norm(v2, axis=1, keepdims=True) + 1e-1
     v3scale = np.linalg.norm(v3, axis=1, keepdims=True) + 1e-1
 
-    ev1 = np.sum(-v1 * e / v1scale, axis=1)
-    ev2 = np.sum(-v2 * e / v2scale, axis=1)
-    ev3 = np.sum(-v3 * e / v3scale, axis=1)
+    ev1 = np.sum(-v1 * e / v1scale, axis=1, keepdims=True)
+    ev2 = np.sum(-v2 * e / v2scale, axis=1, keepdims=True)
+    ev3 = np.sum(-v3 * e / v3scale, axis=1, keepdims=True)
 
     ev1 = np.arccos(ev1)
     ev2 = np.arccos(ev2)
     ev3 = np.arccos(ev3)
+
+    vv12 = np.sum(v1 * v2 / v1scale / v2scale, axis=1, keepdims=True)
+    vv23 = np.sum(v2 * v3 / v2scale / v3scale, axis=1, keepdims=True)
+    vv31 = np.sum(v3 * v1 / v3scale / v1scale, axis=1, keepdims=True)
+
+    vavg = np.log10(np.mean((v1scale, v2scale, v3scale), axis=0))
+    evvv = np.mean((ev1, ev2, ev3), axis=0)
+    vvvv = np.mean((vv12, vv23, vv31), axis=0)
+
+    pos = np.mean(traj[:, :, :3], axis=1)
+    xyzq = reco_df[["qx", "qy", "qz"]].to_numpy()
+    distq = pos - xyzq
+    distq = np.linalg.norm(distq, axis=1, keepdims=True) + 1e-3
+
+    # input
+    X = np.concatenate([reco, xe, ev1, ev2, ev3, vavg, evvv, vvvv, distq], axis=1)
+    LOGGER.info(f"input shape = {X.shape}")
+
+    # # -------------------------------------------------------------------------
+    # # Test
+    # # -------------------------------------------------------------------------
+    # tree_args = {
+    #     "max_depth" : 3, 
+    #     "random_state" : SEED, 
+    # }
+
+    # boosting_args = {
+    #     "n_estimators" : 400, 
+    #     "learning_rate" : 0.8, 
+    #     "random_state" : SEED,
+    # }
+
+    # # inputs
+    # X = np.concatenate([reco, xe, ev1, ev2, ev3, vavg, evvv, vvvv, distq], axis=1)
+    # LOGGER.info(f"input shape = {X.shape}")
+
+    # threads.append(
+    #     threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "Test"))
+    # )
 
     # -------------------------------------------------------------------------
     # Baseline
@@ -119,19 +161,15 @@ if __name__ == "__main__":
         "random_state" : SEED,
     }
 
-    # inputs
-    X1 = np.concatenate([reco, xe[:, np.newaxis]], axis=1)
-    LOGGER.info(f"input shape = {X1.shape}")
-
     threads.append(
-        threading.Thread(target=Train, args=(X1, idx, error, errorx, tree_args, boosting_args, "Baseline"))
+        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "Baseline.0414"))
     )
 
     # -------------------------------------------------------------------------
-    # BaseEV
+    # Deep
     # -------------------------------------------------------------------------
     tree_args = {
-        "max_depth" : 2, 
+        "max_depth" : 3, 
         "random_state" : SEED, 
     }
 
@@ -141,12 +179,8 @@ if __name__ == "__main__":
         "random_state" : SEED,
     }
 
-    # inputs
-    X2 = np.concatenate([reco, xe[:, np.newaxis], ev1[:, np.newaxis], ev2[:, np.newaxis], ev3[:, np.newaxis]], axis=1)
-    LOGGER.info(f"input shape = {X2.shape}")
-
     threads.append(
-        threading.Thread(target=Train, args=(X2, idx, error, errorx, tree_args, boosting_args, "BaseEV"))
+        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "Deep.0414"))
     )
 
     # -------------------------------------------------------------------------
@@ -164,11 +198,11 @@ if __name__ == "__main__":
     }
 
     threads.append(
-        threading.Thread(target=Train, args=(X1, idx, error, errorx, tree_args, boosting_args, "BaseMore"))
+        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "BaseMore.0414"))
     )
 
     # -------------------------------------------------------------------------
-    # BaseMoreEV
+    # BaseMoreMore
     # -------------------------------------------------------------------------
     tree_args = {
         "max_depth" : 2, 
@@ -176,13 +210,13 @@ if __name__ == "__main__":
     }
 
     boosting_args = {
-        "n_estimators" : 1200, 
+        "n_estimators" : 1600, 
         "learning_rate" : 0.8, 
         "random_state" : SEED,
     }
 
     threads.append(
-        threading.Thread(target=Train, args=(X2, idx, error, errorx, tree_args, boosting_args, "BaseMoreEV"))
+        threading.Thread(target=Train, args=(X, idx, error, errorx, tree_args, boosting_args, "BaseMoreMore.0414"))
     )
 
     # starting training

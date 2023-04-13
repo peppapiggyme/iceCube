@@ -84,16 +84,9 @@ FILE_TEST_META = os.path.join(PATH, "train_meta.parquet")
 FILE_SENSOR_GEO = os.path.join(PATH, "sensor_geometry.csv")
 FILE_GNN = os.path.join(MODEL_PATH, "finetuned.ckpt")
 FILE_BDT = os.path.join(MODEL_PATH, "BDT_clf.sklearn")
-FILE_PARAM = os.path.join(MODEL_PATH, "parameters_local.yaml")
 LOGGER.info(f"{len(FILES_TRAIN)} files for training")
 LOGGER.info(f"{len(FILES_TEST)} files for testing")
 memory_check(LOGGER)
-
-# BEST_FIT
-BEST_FIT_VALUES = None
-with open(FILE_PARAM, "r") as f:
-    BEST_FIT_VALUES = yaml.full_load(f)
-LOGGER.info(f"best fit values:\n{BEST_FIT_VALUES}")
 
 
 # sensor geometry
