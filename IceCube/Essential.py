@@ -49,7 +49,8 @@ EVENTS_PER_FILE = 200_000
 # =============================================================================
 
 BATCHES_TRAIN = list(range(101, 601))
-BATCHES_TUNE = list(range(101, 660, 2))
+#BATCHES_TUNE = list(range(101, 660, 2)) # tune-1
+BATCHES_TUNE = list(range(101, 660)) # tune-2
 BATCHES_VALID = list(range(61, 80))
 BATCHES_FIT = list(range(81, 86))
 BATCHES_TEST = list(range(1, 101))

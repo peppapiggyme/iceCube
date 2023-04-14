@@ -9,8 +9,8 @@ if __name__ == "__main__":
     step_per_epoch = int(len(BATCHES_TUNE) * EVENTS_PER_FILE / BATCH_SIZE)
     num_total_step = EPOCHS * step_per_epoch
     LOGGER.info(f"Total steps = {num_total_step}")
-    num_warmup_step = int(step_per_epoch * 0.5)
-    remaining_step = int(step_per_epoch * 5.5)
+    num_warmup_step = int(step_per_epoch * 0.25) # step 1 tune is 0.5 
+    remaining_step = int(step_per_epoch * 5.75) # step 1 tune is 5.5
 
     parquet_dir = os.path.join(PATH, "train")
     meta_dir = os.path.join(PATH, "train_meta")
@@ -37,12 +37,12 @@ if __name__ == "__main__":
     )
 
     model = Model(
-        max_lr=1e-5,
+        max_lr=8e-6, # step 1 tune is 1e-5
         num_warmup_step=num_warmup_step, 
         remaining_step=remaining_step,
     )
 
-    ckpt_file = os.path.join(MODEL_PATH, "finetune-v1.ckpt")
+    ckpt_file = os.path.join(MODEL_PATH, "finetuned-v2.ckpt")
     state_dict = torch.load(ckpt_file)["state_dict"]
     model.load_state_dict(state_dict)
 
