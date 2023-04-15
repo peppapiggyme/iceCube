@@ -32,21 +32,6 @@ def produce_prediction(model, parquet_dir, meta_dir, batch_num=1):
             ], axis=1)
             pred = angles if pred is None else np.concatenate([pred, angles])
 
-    col_xyzk = ["x", "y", "z", "kappa"]
-    col_angles = ["azimuth", "zenith"]
-    col_norm_vec = ["ex", "ey", "ez"]
-    col_dt = ["dt_15", "dt_50", "dt_85"]
-    col_qv = ["qx", "qy", "qz"]
-    col_xyzt = [
-        "x0", "y0", "z0", "t0",
-        "x1", "y1", "z1", "t1",
-        "x2", "y2", "z2", "t2",
-        "x3", "y3", "z3", "t3", ]
-    col_unique = ["uniq_x", "uniq_y", "uniq_z"]
-    col_glob_feat = ["hits", "error", "sumq", "meanq", "bratio"]
-    col_extra = col_norm_vec + col_dt + col_qv + \
-        col_xyzt + col_unique + col_glob_feat
-
     res = pd.DataFrame(pred, columns=col_xyzk+col_angles+col_extra)
     res.to_parquet(output_file)
     print(res)

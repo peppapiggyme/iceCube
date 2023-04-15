@@ -49,8 +49,9 @@ EVENTS_PER_FILE = 200_000
 # =============================================================================
 
 BATCHES_TRAIN = list(range(101, 601))
-#BATCHES_TUNE = list(range(101, 660, 2)) # tune-1
-BATCHES_TUNE = list(range(101, 660)) # tune-2
+BATCHES_TUNE = list(range(101, 660, 2)) # tune-1
+# BATCHES_TUNE = list(range(101, 660)) # tune-2
+BATCHES_EVENTVAR = list(range(101, 601))
 BATCHES_VALID = list(range(61, 80))
 BATCHES_FIT = list(range(81, 86))
 BATCHES_TEST = list(range(1, 101))
@@ -84,11 +85,30 @@ FILE_TRAIN_META = os.path.join(PATH, "train_meta.parquet")
 FILE_TEST_META = os.path.join(PATH, "train_meta.parquet")
 FILE_SENSOR_GEO = os.path.join(PATH, "sensor_geometry.csv")
 FILE_GNN = os.path.join(MODEL_PATH, "finetuned.ckpt")
-FILE_BDT = os.path.join(MODEL_PATH, "BDT_clf.sklearn")
+FILE_BDT = os.path.join(MODEL_PATH, "BDT_clf.Baseline.0414.sklearn")
 LOGGER.info(f"{len(FILES_TRAIN)} files for training")
 LOGGER.info(f"{len(FILES_TEST)} files for testing")
 memory_check(LOGGER)
 
+
+# Column names
+col_xyzk = ["x", "y", "z", "kappa"]
+col_angles = ["azimuth", "zenith"]
+col_norm_vec = ["ex", "ey", "ez"]
+col_dt = ["dt_15", "dt_50", "dt_85"]
+col_qv = ["qx", "qy", "qz"]
+col_xyzt = [
+    "x0", "y0", "z0", "t0",
+    "x1", "y1", "z1", "t1",
+    "x2", "y2", "z2", "t2",
+    "x3", "y3", "z3", "t3", ]
+col_unique = ["uniq_x", "uniq_y", "uniq_z"]
+col_glob_feat = ["hits", "error", "sumq", "meanq", "bratio"]
+col_extra = col_norm_vec + col_dt + col_qv + \
+    col_xyzt + col_unique + col_glob_feat
+
+col_eventCat = ["error", "hits", "sumq", "qz", 
+    "dt_15", "dt_50", "dt_85", "ez", "uniq_x"]
 
 # sensor geometry
 def prepare_sensors(scale=None):
@@ -289,9 +309,16 @@ def prepare_feature(df):
 
 # Dataset
 class IceCube(IterableDataset):
+    """
+    smear: statistical fluctuation
+    smear_rate: apply smearing on one of N samples
+    event_category: once train on certain category, 0: hard, 1: easy, None: train on all
+    cat_model: model that provide the categorization
+    """
     def __init__(
         self, parquet_dir, meta_dir, chunk_ids,
-        batch_size=200, max_pulses=200, shuffle=False, extra=False, smear=False
+        batch_size=200, max_pulses=200, shuffle=False, extra=False, 
+        smear=False, smear_rate=2, event_category=None, cat_model=None
     ):
         self.parquet_dir = parquet_dir
         self.meta_dir = meta_dir
@@ -301,7 +328,11 @@ class IceCube(IterableDataset):
         self.shuffle = shuffle
         self.extra = extra
         self.smear = smear
-        
+        self.smear_rate = smear_rate
+        self.event_category = event_category
+        self.cat_model = cat_model
+        self.eventCat_var_list = [col_extra.index(nm) for nm in col_eventCat]
+
         if self.shuffle:
             random.shuffle(self.chunk_ids)
 
@@ -368,7 +399,7 @@ class IceCube(IterableDataset):
                     z = series2tensor(df.z)
 
                     # smearing
-                    if self.smear and eid % 2 == 0: # smear half of the dataset
+                    if self.smear and eid % self.smear_rate == 0: # smear half of the dataset
                         # x, y, z are fixed ...
                         dist_normal = Normal(0, 1.2) # time resolution = 1.2ns
                         dist_gamma = Gamma(c * 10, 10) # poisson statistics of photoelectrics
@@ -385,7 +416,12 @@ class IceCube(IterableDataset):
                         feats = feature_extraction(prepare_feature(df))
                         setattr(batch_data, "extra_feat", feats)
 
-                    batch.append(batch_data)
+                    if self.event_category is not None:
+                        X = feats[:, self.eventCat_var_list]
+                        category = 0 if self.cat_model.predict(X.numpy()) else 1
+
+                    if self.event_category is None or category == self.event_category:
+                        batch.append(batch_data)
 
                 yield Batch.from_data_list(batch)
 
