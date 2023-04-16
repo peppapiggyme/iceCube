@@ -48,7 +48,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         train_set,
         batch_size=1,
-        num_workers=16,
+        num_workers=20,
     )
 
     # not for validation data apparently
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     valid_loader = DataLoader(
         valid_set,
         batch_size=1,
-        num_workers=16,
+        num_workers=12,
     )
 
     trainer = pl.Trainer(
