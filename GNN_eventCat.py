@@ -2,10 +2,18 @@
 from IceCube.Essential import *
 from IceCube.Model import *
 import pickle
+import argparse
 import pdb
 
 
 if __name__ == "__main__":
+
+    # optimise learning rate
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--lr', metavar='LR', type=float,
+                        help='maximum learning rate')
+    args = parser.parse_args()
+
     # Config
     step_per_epoch = int(len(BATCHES_EVENTVAR) * EVENTS_PER_FILE / BATCH_SIZE)
     num_total_step = EPOCHS * step_per_epoch
@@ -15,12 +23,12 @@ if __name__ == "__main__":
 
     parquet_dir = os.path.join(PATH, "train")
     meta_dir = os.path.join(PATH, "train_meta")
-    
+
     log_dir = "/root/autodl-tmp/logs/"
 
     model = Model(
-        max_lr=1e-5,
-        num_warmup_step=num_warmup_step, 
+        max_lr=args.lr,
+        num_warmup_step=num_warmup_step,
         remaining_step=remaining_step,
     )
 
@@ -28,7 +36,8 @@ if __name__ == "__main__":
     state_dict = torch.load(ckpt_file)["state_dict"]
     model.load_state_dict(state_dict)
 
-    clf = pickle.load(open(os.path.join(MODEL_PATH, 'EventCat_clf.Tree.10.sklearn'), 'rb'))
+    clf = pickle.load(
+        open(os.path.join(MODEL_PATH, 'EventCat_clf.Tree.10.sklearn'), 'rb'))
 
     # randomly smear time and charge in training data
     train_set = IceCube(
@@ -39,7 +48,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         train_set,
         batch_size=1,
-        num_workers=24,
+        num_workers=16,
     )
 
     # not for validation data apparently
@@ -56,12 +65,12 @@ if __name__ == "__main__":
 
     trainer = pl.Trainer(
         default_root_dir=log_dir,
-        logger=pl.loggers.CSVLogger(log_dir), 
+        logger=pl.loggers.CSVLogger(log_dir),
         accelerator="gpu",
-        devices=2,
+        devices=1,
         max_steps=num_total_step,
-        log_every_n_steps=100 * EVENTS_PER_FILE / BATCH_SIZE, # 70 files
-        val_check_interval=100 * EVENTS_PER_FILE / BATCH_SIZE, # 70 files
+        log_every_n_steps=100 * EVENTS_PER_FILE / BATCH_SIZE,  # 100 files
+        val_check_interval=100 * EVENTS_PER_FILE / BATCH_SIZE,  # 100 files
         gradient_clip_val=1.0,
         callbacks=[
             pl.callbacks.ModelSummary(),

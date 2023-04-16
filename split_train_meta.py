@@ -7,7 +7,7 @@ base_path = "/home/zhangbw/Documents/projects/iceCube-kaggle/kaggle/icecube-neut
 meta_path = os.path.join(base_path, "train_meta.parquet")
 splitted_path = os.path.join(base_path, "train_meta")
 
-if not os.path.exists(splitted_path): 
+if not os.path.exists(splitted_path):
     os.mkdir(splitted_path)
 
 start = time()

@@ -4,7 +4,8 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
-import pickle, threading
+import pickle
+import threading
 import pdb
 
 
@@ -18,7 +19,7 @@ def BoostedDecisionTree(X, y, tree_args, boosting_args):
     # Test classifier on testing set
     score = clf.decision_function(X)
     y_hat = clf.predict(X)
-    
+
     return y_hat, score, clf
 
 
@@ -33,7 +34,8 @@ def Train(X, y, tree_args, boosting_args, tag):
 
     # save the model
     LOGGER.info(f"Finished training, saving model ... {tag}")
-    pickle.dump(clf, open(os.path.join(MODEL_PATH, f"EventCat_clf.{tag}.sklearn"), "wb"))
+    pickle.dump(clf, open(os.path.join(
+        MODEL_PATH, f"EventCat_clf.{tag}.sklearn"), "wb"))
 
 
 if __name__ == "__main__":
@@ -54,11 +56,12 @@ if __name__ == "__main__":
     reco_df[np.isnan(reco_df)] = 0
     print(reco_df.head(5))
 
-    n = true_df[["nx","ny","nz"]].to_numpy()
+    n = true_df[["nx", "ny", "nz"]].to_numpy()
     n_hat = reco_df[["x", "y", "z"]].to_numpy()
 
     error, az_error, ze_error = angle_errors(n, n_hat)
-    print(f"error, az_error, ze_error = {error.mean()}, {az_error.mean()}, {ze_error.mean()}")
+    print(
+        f"error, az_error, ze_error = {error.mean()}, {az_error.mean()}, {ze_error.mean()}")
 
     idx = reco_df.kappa.values < 0.5
 
@@ -69,62 +72,64 @@ if __name__ == "__main__":
     # Baseline
     # -------------------------------------------------------------------------
     tree_args = {
-        "max_depth" : 3, 
-        "random_state" : SEED, 
+        "max_depth": 3,
+        "random_state": SEED,
     }
 
     boosting_args = {
-        "n_estimators" : 10, 
-        "learning_rate" : 0.8, 
-        "random_state" : SEED,
+        "n_estimators": 10,
+        "learning_rate": 0.8,
+        "random_state": SEED,
     }
 
     # inputs
     LOGGER.info(f"input shape = {X.shape}")
 
     threads.append(
-        threading.Thread(target=Train, args=(X, idx, tree_args, boosting_args, "Tree.10"))
+        threading.Thread(target=Train, args=(
+            X, idx, tree_args, boosting_args, "Tree.10"))
     )
 
     # -------------------------------------------------------------------------
     # Baseline
     # -------------------------------------------------------------------------
     tree_args = {
-        "max_depth" : 3, 
-        "random_state" : SEED, 
+        "max_depth": 3,
+        "random_state": SEED,
     }
 
     boosting_args = {
-        "n_estimators" : 8, 
-        "learning_rate" : 0.8, 
-        "random_state" : SEED,
+        "n_estimators": 8,
+        "learning_rate": 0.8,
+        "random_state": SEED,
     }
 
     threads.append(
-        threading.Thread(target=Train, args=(X, idx, tree_args, boosting_args, "Tree.8"))
+        threading.Thread(target=Train, args=(
+            X, idx, tree_args, boosting_args, "Tree.8"))
     )
 
     # -------------------------------------------------------------------------
     # Baseline
     # -------------------------------------------------------------------------
     tree_args = {
-        "max_depth" : 3, 
-        "random_state" : SEED, 
+        "max_depth": 3,
+        "random_state": SEED,
     }
 
     boosting_args = {
-        "n_estimators" : 6, 
-        "learning_rate" : 0.8, 
-        "random_state" : SEED,
+        "n_estimators": 6,
+        "learning_rate": 0.8,
+        "random_state": SEED,
     }
 
     threads.append(
-        threading.Thread(target=Train, args=(X, idx, tree_args, boosting_args, "Tree.6"))
+        threading.Thread(target=Train, args=(
+            X, idx, tree_args, boosting_args, "Tree.6"))
     )
 
     # starting training
     _ = [t.start() for t in threads]
-    _ = [t.join()  for t in threads]
-    
-    LOGGER.info("All threads are finished")
+    _ = [t.join() for t in threads]
 
+    LOGGER.info("All threads are finished")

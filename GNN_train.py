@@ -14,7 +14,7 @@ if __name__ == "__main__":
 
     parquet_dir = os.path.join(PATH, "train")
     meta_dir = os.path.join(PATH, "train_meta")
-    
+
     log_dir = "/root/autodl-tmp/logs/"
 
     train_set = IceCube(
@@ -27,7 +27,8 @@ if __name__ == "__main__":
         num_workers=24,
     )
 
-    valid_set = IceCube(parquet_dir, meta_dir, BATCHES_VALID, batch_size=BATCH_SIZE)
+    valid_set = IceCube(parquet_dir, meta_dir,
+                        BATCHES_VALID, batch_size=BATCH_SIZE)
     valid_loader = DataLoader(
         valid_set,
         batch_size=1,
@@ -36,7 +37,7 @@ if __name__ == "__main__":
 
     model = Model(
         max_lr=1e-4,
-        num_warmup_step=num_warmup_step, 
+        num_warmup_step=num_warmup_step,
         remaining_step=remaining_step,
     )
 
@@ -45,12 +46,12 @@ if __name__ == "__main__":
 
     trainer = pl.Trainer(
         default_root_dir=log_dir,
-        logger=pl.loggers.CSVLogger(log_dir), 
+        logger=pl.loggers.CSVLogger(log_dir),
         accelerator="gpu",
         devices=2,
         max_steps=num_total_step,
-        log_every_n_steps=100 * EVENTS_PER_FILE / BATCH_SIZE, # 100 files
-        val_check_interval=100 * EVENTS_PER_FILE / BATCH_SIZE, # 100 files
+        log_every_n_steps=100 * EVENTS_PER_FILE / BATCH_SIZE,  # 100 files
+        val_check_interval=100 * EVENTS_PER_FILE / BATCH_SIZE,  # 100 files
         gradient_clip_val=1.0,
         callbacks=[
             pl.callbacks.ModelSummary(),

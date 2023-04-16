@@ -1,6 +1,10 @@
 import logging
 import logging.config
-import os, re, gc, psutil
+import os
+import re
+import gc
+import psutil
+
 
 def get_logger(name, msg):
     """
@@ -32,7 +36,7 @@ def walk_dir(dirname, batch_ids):
                 batch_ids.append(int(match[0]))
                 files[int(match[0])] = os.path.join(base, name)
         return files, batch_ids
-    
+
     for base, _, names in os.walk(dirname):
         selected_files = dict()
         for name in names:
@@ -46,4 +50,4 @@ def walk_dir(dirname, batch_ids):
 def memory_check(logger, msg=""):
     gc.collect()
     logger.debug(f"memory usage {psutil.virtual_memory().used / 1024**3:.2f} "
-                f"of {psutil.virtual_memory().total / 1024**3:.2f} GB {msg}")
+                 f"of {psutil.virtual_memory().total / 1024**3:.2f} GB {msg}")

@@ -13,7 +13,7 @@ class MLP(nn.Sequential):
 
 class Model(pl.LightningModule):
     def __init__(
-        self, max_lr=1e-3, 
+        self, max_lr=1e-3,
         num_warmup_step=1_000,
         remaining_step=1_000,
     ):
@@ -48,7 +48,8 @@ class Model(pl.LightningModule):
         ht = homophily(edge_index, vert_feat[:, 3], batch).reshape(-1, 1)
         means = scatter_mean(vert_feat, batch, dim=0)
         n_p = torch.log10(data.n_pulses).reshape(-1, 1)
-        global_feats = torch.cat([means, hx, hy, hz, ht, n_p], dim=1)  # [B, 11]
+        global_feats = torch.cat(
+            [means, hx, hy, hz, ht, n_p], dim=1)  # [B, 11]
 
         # Distribute global_feats to each vertex
         _, cnts = torch.unique_consecutive(batch, return_counts=True)
@@ -103,10 +104,10 @@ class Model(pl.LightningModule):
         true_xyz = data.gt.view(-1, 3)  # [B, 3]
         loss = VonMisesFisher3DLoss()(pred_xyzk, true_xyz).mean()
         error = angular_error(pred_xyzk[:, :3], true_xyz).mean()
-        self.log(f"loss-{prefix}", loss, batch_size=len(true_xyz), 
-            on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        self.log(f"error-{prefix}", error, batch_size=len(true_xyz), 
-            on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.log(f"loss-{prefix}", loss, batch_size=len(true_xyz),
+                 on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        self.log(f"error-{prefix}", error, batch_size=len(true_xyz),
+                 on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         return loss
 
     def training_step(self, data, _):
@@ -114,7 +115,7 @@ class Model(pl.LightningModule):
 
     def validation_step(self, data, _):
         return self.train_or_valid_step(data, "valid")
-    
+
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.max_lr)
         scheduler = torch.optim.lr_scheduler.SequentialLR(
@@ -198,11 +199,13 @@ class LogCMK(torch.autograd.Function):
         dtype = ctx.dtype
         kappa = kappa.double().cpu().numpy()
         grads = -(
-            (scipy.special.iv(m / 2.0, kappa)) / (scipy.special.iv(m / 2.0 - 1, kappa))
+            (scipy.special.iv(m / 2.0, kappa)) /
+            (scipy.special.iv(m / 2.0 - 1, kappa))
         )
         return (
             None,
-            grad_output * torch.from_numpy(grads).to(grad_output.device).type(dtype),
+            grad_output *
+            torch.from_numpy(grads).to(grad_output.device).type(dtype),
         )
 
 

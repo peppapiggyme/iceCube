@@ -9,12 +9,12 @@ if __name__ == "__main__":
     step_per_epoch = int(len(BATCHES_TUNE) * EVENTS_PER_FILE / BATCH_SIZE)
     num_total_step = EPOCHS * step_per_epoch
     LOGGER.info(f"Total steps = {num_total_step}")
-    num_warmup_step = int(step_per_epoch * 0.25) # step 1 tune is 0.5 
-    remaining_step = int(step_per_epoch * 5.75) # step 1 tune is 5.5
+    num_warmup_step = int(step_per_epoch * 0.25)  # step 1 tune is 0.5
+    remaining_step = int(step_per_epoch * 5.75)  # step 1 tune is 5.5
 
     parquet_dir = os.path.join(PATH, "train")
     meta_dir = os.path.join(PATH, "train_meta")
-    
+
     log_dir = "/root/autodl-tmp/logs/"
 
     # randomly smear time and charge in training data
@@ -29,7 +29,8 @@ if __name__ == "__main__":
     )
 
     # not for validation data apparently
-    valid_set = IceCube(parquet_dir, meta_dir, BATCHES_VALID, batch_size=BATCH_SIZE)
+    valid_set = IceCube(parquet_dir, meta_dir,
+                        BATCHES_VALID, batch_size=BATCH_SIZE)
     valid_loader = DataLoader(
         valid_set,
         batch_size=1,
@@ -37,8 +38,8 @@ if __name__ == "__main__":
     )
 
     model = Model(
-        max_lr=8e-6, # step 1 tune is 1e-5
-        num_warmup_step=num_warmup_step, 
+        max_lr=8e-6,  # step 1 tune is 1e-5
+        num_warmup_step=num_warmup_step,
         remaining_step=remaining_step,
     )
 
@@ -48,12 +49,12 @@ if __name__ == "__main__":
 
     trainer = pl.Trainer(
         default_root_dir=log_dir,
-        logger=pl.loggers.CSVLogger(log_dir), 
+        logger=pl.loggers.CSVLogger(log_dir),
         accelerator="gpu",
         devices=2,
         max_steps=num_total_step,
-        log_every_n_steps=70 * EVENTS_PER_FILE / BATCH_SIZE, # 70 files
-        val_check_interval=70 * EVENTS_PER_FILE / BATCH_SIZE, # 70 files
+        log_every_n_steps=70 * EVENTS_PER_FILE / BATCH_SIZE,  # 70 files
+        val_check_interval=70 * EVENTS_PER_FILE / BATCH_SIZE,  # 70 files
         gradient_clip_val=1.0,
         callbacks=[
             pl.callbacks.ModelSummary(),
