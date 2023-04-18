@@ -53,7 +53,7 @@ EVENTS_PER_FILE = 200_000
 BATCHES_TRAIN = list(range(101, 601))
 BATCHES_TUNE = list(range(101, 660, 2))  # tune-1
 # BATCHES_TUNE = list(range(101, 660)) # tune-2
-BATCHES_EVENTVAR = list(range(101, 601))
+BATCHES_EVENTVAR = list(range(101, 601, 2))
 BATCHES_VALID = list(range(61, 80))
 BATCHES_FIT = list(range(81, 86))
 BATCHES_TEST = list(range(1, 101))
@@ -88,7 +88,9 @@ FILE_TRAIN_META = os.path.join(PATH, "train_meta.parquet")
 FILE_TEST_META = os.path.join(PATH, "train_meta.parquet")
 FILE_SENSOR_GEO = os.path.join(PATH, "sensor_geometry.csv")
 FILE_GNN = os.path.join(MODEL_PATH, "finetuned.ckpt")
+FILE_GNN_KLOW = os.path.join(MODEL_PATH, "finetuned-klow.ckpt")
 FILE_BDT = os.path.join(MODEL_PATH, "BDT_clf.Baseline.0414.sklearn")
+FILE_EVENTCAT = os.path.join(MODEL_PATH, "EventCat_clf.Tree.10.sklearn")
 LOGGER.info(f"{len(FILES_TRAIN)} files for training")
 LOGGER.info(f"{len(FILES_TEST)} files for testing")
 memory_check(LOGGER)
@@ -166,7 +168,7 @@ def vector2angles(n, eps=1e-8):
     return azimuth, zenith
 
 
-def series2tensor(series, set_device=None):
+def to_tensor(series, set_device=None):
     ret = torch.from_numpy(series.values).float()
     if set_device is not None:
         return ret.to(DEVICE)
@@ -246,11 +248,11 @@ def feature_extraction(df, fun=None, eps=1e-8):
     # sort by time
     df.sort_values(["time"], inplace=True)
 
-    t = series2tensor(df.time)
-    c = series2tensor(df.charge)
-    x = series2tensor(df.x)
-    y = series2tensor(df.y)
-    z = series2tensor(df.z)
+    t = to_tensor(df.time)
+    c = to_tensor(df.charge)
+    x = to_tensor(df.x)
+    y = to_tensor(df.y)
+    z = to_tensor(df.z)
 
     # hits
     hits = t.numel()
@@ -301,7 +303,7 @@ def feature_extraction(df, fun=None, eps=1e-8):
     if hits > n_groups:
         sec_len = floor(hits / n_groups)
         remain_len = hits - (n_groups - 1) * sec_len
-        xyzt = series2tensor(df[["x", "y", "z", "time"]])
+        xyzt = to_tensor(df[["x", "y", "z", "time"]])
         xyzt = torch.split(xyzt, [sec_len, sec_len, sec_len, remain_len])
         xyzt = torch.concat([xx.mean(axis=0) for xx in xyzt])
     else:
@@ -425,12 +427,12 @@ class IceCube(IterableDataset):
 
                     df.sort_values(["time"], inplace=True)
 
-                    t = series2tensor(df.time)
-                    c = series2tensor(df.charge)
-                    a = series2tensor(df.auxiliary)
-                    x = series2tensor(df.x)
-                    y = series2tensor(df.y)
-                    z = series2tensor(df.z)
+                    t = to_tensor(df.time)
+                    c = to_tensor(df.charge)
+                    a = to_tensor(df.auxiliary)
+                    x = to_tensor(df.x)
+                    y = to_tensor(df.y)
+                    z = to_tensor(df.z)
 
                     # smearing
                     if self.smear and eid % self.smear_rate == 0:  # smear half of the dataset

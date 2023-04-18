@@ -18,8 +18,8 @@ if __name__ == "__main__":
     step_per_epoch = int(len(BATCHES_EVENTVAR) * EVENTS_PER_FILE / BATCH_SIZE)
     num_total_step = EPOCHS * step_per_epoch
     LOGGER.info(f"Total steps = {num_total_step}")
-    num_warmup_step = int(step_per_epoch * 0.5)
-    remaining_step = int(step_per_epoch * 5.5)
+    num_warmup_step = int(step_per_epoch * 0.25)
+    remaining_step = int(step_per_epoch * 5.75)
 
     parquet_dir = os.path.join(PATH, "train")
     meta_dir = os.path.join(PATH, "train_meta")
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     train_loader = DataLoader(
         train_set,
         batch_size=1,
-        num_workers=20,
+        num_workers=32,
     )
 
     # not for validation data apparently
@@ -60,17 +60,17 @@ if __name__ == "__main__":
     valid_loader = DataLoader(
         valid_set,
         batch_size=1,
-        num_workers=12,
+        num_workers=16,
     )
 
     trainer = pl.Trainer(
         default_root_dir=log_dir,
         logger=pl.loggers.CSVLogger(log_dir),
         accelerator="gpu",
-        devices=1,
+        devices=2,
         max_steps=num_total_step,
-        log_every_n_steps=100 * EVENTS_PER_FILE / BATCH_SIZE,  # 100 files
-        val_check_interval=100 * EVENTS_PER_FILE / BATCH_SIZE,  # 100 files
+        log_every_n_steps=50 * EVENTS_PER_FILE / BATCH_SIZE,  # 50 files
+        val_check_interval=50 * EVENTS_PER_FILE / BATCH_SIZE,  # 50 files
         gradient_clip_val=1.0,
         callbacks=[
             pl.callbacks.ModelSummary(),
